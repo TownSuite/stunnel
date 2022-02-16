@@ -1,4 +1,4 @@
-# vc.mak by Michal Trojnara 1998-2019
+# vc.mak by Michal Trojnara 1998-2022
 # with help of David Gillingham <dgillingham@gmail.com>
 # with help of Pierre Delaage <delaage.pierre@free.fr>
 
@@ -51,7 +51,7 @@ CC=cl
 LINK=link
 
 UNICODEFLAGS=/DUNICODE /D_UNICODE
-CFLAGS=/MD /W3 /O2 /Zi /nologo /I"$(INCDIR)" $(UNICODEFLAGS)
+CFLAGS=/MT /W3 /O2 /Zi /nologo /I"$(INCDIR)" $(UNICODEFLAGS)
 LDFLAGS=/NOLOGO /DEBUG
 
 SHAREDLIBS=ws2_32.lib user32.lib shell32.lib kernel32.lib

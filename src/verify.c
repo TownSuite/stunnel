@@ -1,6 +1,6 @@
 /*
  *   stunnel       TLS offloading and load-balancing proxy
- *   Copyright (C) 1998-2019 Michal Trojnara <Michal.Trojnara@stunnel.org>
+ *   Copyright (C) 1998-2022 Michal Trojnara <Michal.Trojnara@stunnel.org>
  *
  *   This program is free software; you can redistribute it and/or modify it
  *   under the terms of the GNU General Public License as published by the
@@ -214,23 +214,23 @@ NOEXPORT int verify_callback(int preverify_ok, X509_STORE_CTX *callback_ctx) {
         s_log(LOG_INFO, "Certificate verification disabled");
         return 1; /* accept */
     }
-    if(verify_checks(c, preverify_ok, callback_ctx)) {
+    if(verify_checks(c, preverify_ok, callback_ctx))
+        return 1; /* accept */
+    if(c->opt->option.connect_before_ssl)
+        return 0; /* reject */
+    if(c->opt->redirect_addr.names) {
         SSL_SESSION *sess=SSL_get1_session(c->ssl);
-        if(sess) {
-            int ok=SSL_SESSION_set_ex_data(sess, index_session_authenticated,
-                (void *)(-1));
+        if(!sess)
+            return 0; /* reject */
+        if(!SSL_SESSION_set_ex_data(sess,
+                index_session_authenticated, NULL)) {
+            sslerror("SSL_SESSION_set_ex_data");
             SSL_SESSION_free(sess);
-            if(!ok) {
-                sslerror("SSL_SESSION_set_ex_data");
-                return 0; /* reject */
-            }
+            return 0; /* reject */
         }
+        SSL_SESSION_free(sess);
         return 1; /* accept */
     }
-    if(c->opt->option.client || c->opt->protocol)
-        return 0; /* reject */
-    if(c->opt->redirect_addr.names)
-        return 1; /* accept */
     return 0; /* reject */
 }
 

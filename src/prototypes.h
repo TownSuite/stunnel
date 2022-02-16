@@ -1,6 +1,6 @@
 /*
  *   stunnel       TLS offloading and load-balancing proxy
- *   Copyright (C) 1998-2019 Michal Trojnara <Michal.Trojnara@stunnel.org>
+ *   Copyright (C) 1998-2022 Michal Trojnara <Michal.Trojnara@stunnel.org>
  *
  *   This program is free software; you can redistribute it and/or modify it
  *   under the terms of the GNU General Public License as published by the
@@ -43,6 +43,14 @@
 #if defined(USE_PTHREAD) || defined(USE_WIN32)
 #define USE_OS_THREADS
 #endif
+
+#ifdef USE_OS_THREADS
+#ifndef USE_WIN32
+    /* FIXME: waiting for a single terminate_pipe socket
+     * from multiple threads causes a deadlock on WIN32 */
+#define USE_TERMINATE_PIPE
+#endif /* USE_WIN32 */
+#endif /* USE_OS_THREADS */
 
 /**************************************** forward declarations */
 
@@ -118,7 +126,10 @@ typedef struct sockaddr_list {                          /* list of addresses */
 
 #ifndef OPENSSL_NO_COMP
 typedef enum {
-    COMP_NONE, COMP_DEFLATE, COMP_ZLIB
+    COMP_NONE,                           /* empty compression algorithms set */
+    COMP_DEFLATE,            /* default OpenSSL's compression algorithms set */
+    COMP_ZLIB,          /* additional historic ZLIB compression algorithm id */
+    STUNNEL_COMPS                   /* number of compression algorithms sets */
 } COMP_TYPE;
 #endif /* !defined(OPENSSL_NO_COMP) */
 
@@ -240,9 +251,12 @@ typedef struct service_options_struct {
     char *cert;                                             /* cert filename */
     char *key;                               /* pem (priv key/cert) filename */
     long session_size, session_timeout;
-    long unsigned ssl_options_set;
+#if OPENSSL_VERSION_NUMBER>=0x10100000L
+    int security_level;
+#endif /* OpenSSL 1.1.0 or later */
+    uint64_t ssl_options_set;
 #if OPENSSL_VERSION_NUMBER>=0x009080dfL
-    long unsigned ssl_options_clear;
+    uint64_t ssl_options_clear;
 #endif /* OpenSSL 0.9.8m or later */
 #if OPENSSL_VERSION_NUMBER>=0x10100000L
     int min_proto_version, max_proto_version;
@@ -291,7 +305,8 @@ typedef struct service_options_struct {
     char *username;
 
         /* service-specific data for protocol.c */
-    char * protocol;
+    char *protocol;
+    NAME_LIST *protocol_header;
     char *protocol_host;
     char *protocol_domain;
     char *protocol_username;
@@ -319,6 +334,7 @@ typedef struct service_options_struct {
 #endif
         unsigned local:1;               /* outgoing interface specified */
         unsigned retry:1;               /* loop remote+program */
+        unsigned session_resume:1;      /* enable session resumption */
         unsigned sessiond:1;
 #ifndef USE_WIN32
         unsigned pty:1;
@@ -470,8 +486,6 @@ int main_configure(char *, char *);
 void main_cleanup(void);
 int drop_privileges(int);
 void daemon_loop(void);
-void unbind_ports(void);
-int bind_ports(void);
 void signal_post(uint8_t);
 #if !defined(USE_WIN32) && !defined(USE_OS2)
 void pid_status_hang(const char *);
@@ -480,14 +494,13 @@ void stunnel_info(int);
 
 /**************************************** prototypes for options.c */
 
-extern char *configuration_file;
 extern unsigned number_of_sections;
 
 int options_cmdline(char *, char *);
 int options_parse(CONF_TYPE);
 void options_defaults(void);
 void options_apply(void);
-void options_free(void);
+void options_free(int);
 
 void service_up_ref(SERVICE_OPTIONS *);
 void service_free(SERVICE_OPTIONS *);
@@ -547,6 +560,7 @@ int cron_init(void);
 extern int index_ssl_cli, index_ssl_ctx_opt;
 extern int index_session_authenticated, index_session_connect_address;
 
+int fips_available();
 int ssl_init(void);
 int ssl_configure(GLOBAL_OPTIONS *);
 
@@ -564,6 +578,9 @@ int context_init(SERVICE_OPTIONS *);
 void psk_sort(PSK_TABLE *, PSK_KEYS *);
 PSK_KEYS *psk_find(const PSK_TABLE *, const char *);
 #endif /* !defined(OPENSSL_NO_PSK) */
+#ifndef OPENSSL_NO_ENGINE
+UI_METHOD *ui_stunnel(void);
+#endif /* !defined(OPENSSL_NO_ENGINE) */
 void print_session_id(SSL_SESSION *);
 void sslerror(char *);
 
@@ -623,6 +640,7 @@ void throw_exception(CLI *, int) NORETURN;
 int get_socket_error(const SOCKET);
 int s_connect(CLI *, SOCKADDR_UNION *, socklen_t);
 void s_write(CLI *, SOCKET fd, const void *, size_t);
+size_t s_read_eof(CLI *, SOCKET fd, void *, size_t);
 void s_read(CLI *, SOCKET fd, void *, size_t);
 void fd_putline(CLI *, SOCKET, const char *);
 char *fd_getline(CLI *, SOCKET);
@@ -634,10 +652,17 @@ void fd_printf(CLI *, SOCKET, const char *, ...)
     ;
 #endif
 void s_ssl_write(CLI *, const void *, int);
+size_t s_ssl_read_eof(CLI *, void *, int);
 void s_ssl_read(CLI *, void *, int);
 char *ssl_getstring(CLI *c);
 char *ssl_getline(CLI *c);
 void ssl_putline(CLI *c, const char *);
+void ssl_printf(CLI *, const char *, ...)
+#ifdef __GNUC__
+    __attribute__((format(printf, 2, 3)));
+#else
+    ;
+#endif
 
 /**************************************** prototype for protocol.c */
 
@@ -647,6 +672,11 @@ typedef enum {
     PROTOCOL_MIDDLE,
     PROTOCOL_LATE
 } PHASE;
+
+#ifdef USE_WIN32
+extern HWND capwin_hwnd;
+extern LONG capwin_connectivity;
+#endif
 
 char *protocol(CLI *, SERVICE_OPTIONS *opt, const PHASE);
 
@@ -717,9 +747,11 @@ struct CRYPTO_dynlock_value {
 #ifdef USE_WIN32
     CRITICAL_SECTION critical_section;
 #endif
+#ifdef DEBUG_LOCKS
     const char *init_file, *read_lock_file, *write_lock_file,
         *unlock_file, *destroy_file;
     int init_line, read_lock_line, write_lock_line, unlock_line, destroy_line;
+#endif
 };
 
 typedef struct CRYPTO_dynlock_value CRYPTO_RWLOCK;
@@ -889,7 +921,10 @@ void message_box(LPCTSTR, const UINT);
 
 int ui_passwd_cb(char *, int, int, void *);
 #ifndef OPENSSL_NO_ENGINE
-UI_METHOD *UI_stunnel(void);
+int (*ui_get_opener(void)) (UI *);
+int (*ui_get_writer(void)) (UI *, UI_STRING *);
+int (*ui_get_reader(void)) (UI *, UI_STRING *);
+int (*ui_get_closer(void)) (UI *);
 #endif /* !defined(OPENSSL_NO_ENGINE) */
 
 #ifdef ICON_IMAGE

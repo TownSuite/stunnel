@@ -1,6 +1,6 @@
 /*
  *   stunnel       TLS offloading and load-balancing proxy
- *   Copyright (C) 1998-2019 Michal Trojnara <Michal.Trojnara@stunnel.org>
+ *   Copyright (C) 1998-2022 Michal Trojnara <Michal.Trojnara@stunnel.org>
  *
  *   This program is free software; you can redistribute it and/or modify it
  *   under the terms of the GNU General Public License as published by the
@@ -73,7 +73,7 @@ int scandir(const char *, struct dirent ***,
     int (*)(const struct dirent **, const struct dirent **));
 int alphasort(const struct dirent **, const struct dirent **);
 #endif
-NOEXPORT char *parse_global_option(CMD, char *, char *);
+NOEXPORT char *parse_global_option(CMD, GLOBAL_OPTIONS *, char *, char *);
 NOEXPORT char *parse_service_option(CMD, SERVICE_OPTIONS **, char *, char *);
 
 #ifndef OPENSSL_NO_TLSEXT
@@ -108,92 +108,83 @@ typedef struct {
 } SSL_OPTION;
 
 static const SSL_OPTION ssl_opts[] = {
-    {"MICROSOFT_SESS_ID_BUG", SSL_OP_MICROSOFT_SESS_ID_BUG},
-    {"NETSCAPE_CHALLENGE_BUG", SSL_OP_NETSCAPE_CHALLENGE_BUG},
-#ifdef SSL_OP_LEGACY_SERVER_CONNECT
-    {"LEGACY_SERVER_CONNECT", SSL_OP_LEGACY_SERVER_CONNECT},
-#endif
-    {"NETSCAPE_REUSE_CIPHER_CHANGE_BUG",
-        SSL_OP_NETSCAPE_REUSE_CIPHER_CHANGE_BUG},
-#ifdef SSL_OP_TLSEXT_PADDING
-    {"TLSEXT_PADDING", SSL_OP_TLSEXT_PADDING},
-#endif
-    {"MICROSOFT_BIG_SSLV3_BUFFER", SSL_OP_MICROSOFT_BIG_SSLV3_BUFFER},
-#ifdef SSL_OP_SAFARI_ECDHE_ECDSA_BUG
-    {"SAFARI_ECDHE_ECDSA_BUG", SSL_OP_SAFARI_ECDHE_ECDSA_BUG},
-#endif
-    {"SSLEAY_080_CLIENT_DH_BUG", SSL_OP_SSLEAY_080_CLIENT_DH_BUG},
-    {"TLS_D5_BUG", SSL_OP_TLS_D5_BUG},
-    {"TLS_BLOCK_PADDING_BUG", SSL_OP_TLS_BLOCK_PADDING_BUG},
-#ifdef SSL_OP_MSIE_SSLV2_RSA_PADDING
-    {"MSIE_SSLV2_RSA_PADDING", SSL_OP_MSIE_SSLV2_RSA_PADDING},
-#endif
-    {"SSLREF2_REUSE_CERT_TYPE_BUG", SSL_OP_SSLREF2_REUSE_CERT_TYPE_BUG},
-#ifdef SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS
-    {"DONT_INSERT_EMPTY_FRAGMENTS", SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS},
-#endif
+#ifdef SSL_OP_ALL
     {"ALL", SSL_OP_ALL},
-#ifdef SSL_OP_NO_QUERY_MTU
-    {"NO_QUERY_MTU", SSL_OP_NO_QUERY_MTU},
 #endif
-#ifdef SSL_OP_COOKIE_EXCHANGE
-    {"COOKIE_EXCHANGE", SSL_OP_COOKIE_EXCHANGE},
+#ifdef SSL_OP_ALLOW_CLIENT_RENEGOTIATION
+    {"ALLOW_CLIENT_RENEGOTIATION", SSL_OP_ALLOW_CLIENT_RENEGOTIATION},
 #endif
-#ifdef SSL_OP_NO_TICKET
-    {"NO_TICKET", SSL_OP_NO_TICKET},
+#ifdef SSL_OP_ALLOW_NO_DHE_KEX
+    {"ALLOW_NO_DHE_KEX", SSL_OP_ALLOW_NO_DHE_KEX},
+#endif
+#ifdef SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION
+    {"ALLOW_UNSAFE_LEGACY_RENEGOTIATION", SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION},
+#endif
+#ifdef SSL_OP_CIPHER_SERVER_PREFERENCE
+    {"CIPHER_SERVER_PREFERENCE", SSL_OP_CIPHER_SERVER_PREFERENCE},
 #endif
 #ifdef SSL_OP_CISCO_ANYCONNECT
     {"CISCO_ANYCONNECT", SSL_OP_CISCO_ANYCONNECT},
 #endif
-#ifdef SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION
-    {"NO_SESSION_RESUMPTION_ON_RENEGOTIATION",
-        SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION},
+#ifdef SSL_OP_CLEANSE_PLAINTEXT
+    {"CLEANSE_PLAINTEXT", SSL_OP_CLEANSE_PLAINTEXT},
+#endif
+#ifdef SSL_OP_COOKIE_EXCHANGE
+    {"COOKIE_EXCHANGE", SSL_OP_COOKIE_EXCHANGE},
+#endif
+#ifdef SSL_OP_CRYPTOPRO_TLSEXT_BUG
+    {"CRYPTOPRO_TLSEXT_BUG", SSL_OP_CRYPTOPRO_TLSEXT_BUG},
+#endif
+#ifdef SSL_OP_DISABLE_TLSEXT_CA_NAMES
+    {"DISABLE_TLSEXT_CA_NAMES", SSL_OP_DISABLE_TLSEXT_CA_NAMES},
+#endif
+#ifdef SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS
+    {"DONT_INSERT_EMPTY_FRAGMENTS", SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS},
+#endif
+#ifdef SSL_OP_ENABLE_KTLS
+    {"ENABLE_KTLS", SSL_OP_ENABLE_KTLS},
+#endif
+#ifdef SSL_OP_ENABLE_MIDDLEBOX_COMPAT
+    {"ENABLE_MIDDLEBOX_COMPAT", SSL_OP_ENABLE_MIDDLEBOX_COMPAT},
+#endif
+#ifdef SSL_OP_EPHEMERAL_RSA
+    {"EPHEMERAL_RSA", SSL_OP_EPHEMERAL_RSA},
+#endif
+#ifdef SSL_OP_IGNORE_UNEXPECTED_EOF
+    {"IGNORE_UNEXPECTED_EOF", SSL_OP_IGNORE_UNEXPECTED_EOF},
+#endif
+#ifdef SSL_OP_LEGACY_SERVER_CONNECT
+    {"LEGACY_SERVER_CONNECT", SSL_OP_LEGACY_SERVER_CONNECT},
+#endif
+#ifdef SSL_OP_MICROSOFT_BIG_SSLV3_BUFFER
+    {"MICROSOFT_BIG_SSLV3_BUFFER", SSL_OP_MICROSOFT_BIG_SSLV3_BUFFER},
+#endif
+#ifdef SSL_OP_MICROSOFT_SESS_ID_BUG
+    {"MICROSOFT_SESS_ID_BUG", SSL_OP_MICROSOFT_SESS_ID_BUG},
+#endif
+#ifdef SSL_OP_MSIE_SSLV2_RSA_PADDING
+    {"MSIE_SSLV2_RSA_PADDING", SSL_OP_MSIE_SSLV2_RSA_PADDING},
+#endif
+#ifdef SSL_OP_NETSCAPE_CA_DN_BUG
+    {"NETSCAPE_CA_DN_BUG", SSL_OP_NETSCAPE_CA_DN_BUG},
+#endif
+#ifdef SSL_OP_NETSCAPE_CHALLENGE_BUG
+    {"NETSCAPE_CHALLENGE_BUG", SSL_OP_NETSCAPE_CHALLENGE_BUG},
+#endif
+#ifdef SSL_OP_NETSCAPE_DEMO_CIPHER_CHANGE_BUG
+    {"NETSCAPE_DEMO_CIPHER_CHANGE_BUG", SSL_OP_NETSCAPE_DEMO_CIPHER_CHANGE_BUG},
+#endif
+#ifdef SSL_OP_NETSCAPE_REUSE_CIPHER_CHANGE_BUG
+    {"NETSCAPE_REUSE_CIPHER_CHANGE_BUG", SSL_OP_NETSCAPE_REUSE_CIPHER_CHANGE_BUG},
+#endif
+#ifdef SSL_OP_NO_ANTI_REPLAY
+    {"NO_ANTI_REPLAY", SSL_OP_NO_ANTI_REPLAY},
 #endif
 #ifdef SSL_OP_NO_COMPRESSION
     {"NO_COMPRESSION", SSL_OP_NO_COMPRESSION},
 #endif
-#ifdef SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION
-    {"ALLOW_UNSAFE_LEGACY_RENEGOTIATION",
-        SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION},
-#endif
-#ifdef SSL_OP_SINGLE_ECDH_USE
-    {"SINGLE_ECDH_USE", SSL_OP_SINGLE_ECDH_USE},
-#endif
-    {"SINGLE_DH_USE", SSL_OP_SINGLE_DH_USE},
-    {"EPHEMERAL_RSA", SSL_OP_EPHEMERAL_RSA},
-#ifdef SSL_OP_CIPHER_SERVER_PREFERENCE
-    {"CIPHER_SERVER_PREFERENCE", SSL_OP_CIPHER_SERVER_PREFERENCE},
-#endif
-    {"TLS_ROLLBACK_BUG", SSL_OP_TLS_ROLLBACK_BUG},
-    {"NO_SSLv2", SSL_OP_NO_SSLv2},
-    {"NO_SSLv3", SSL_OP_NO_SSLv3},
-    {"NO_TLSv1", SSL_OP_NO_TLSv1},
-#ifdef SSL_OP_NO_TLSv1_1
-    {"NO_TLSv1.1", SSL_OP_NO_TLSv1_1},
-#else /* ignore if unsupported by OpenSSL */
-    {"NO_TLSv1.1", 0},
-#endif
-#ifdef SSL_OP_NO_TLSv1_2
-    {"NO_TLSv1.2", SSL_OP_NO_TLSv1_2},
-#else /* ignore if unsupported by OpenSSL */
-    {"NO_TLSv1.2", 0},
-#endif
-#ifdef SSL_OP_NO_TLSv1_3
-    {"NO_TLSv1.3", SSL_OP_NO_TLSv1_3},
-    {"NO_TLSv1_3", SSL_OP_NO_TLSv1_3}, /* keep compatibility with our typo */
-#else /* ignore if unsupported by OpenSSL */
-    {"NO_TLSv1.3", 0},
-    {"NO_TLSv1_3", 0}, /* keep compatibility with our typo */
-#endif
-    {"PKCS1_CHECK_1", SSL_OP_PKCS1_CHECK_1},
-    {"PKCS1_CHECK_2", SSL_OP_PKCS1_CHECK_2},
-    {"NETSCAPE_CA_DN_BUG", SSL_OP_NETSCAPE_CA_DN_BUG},
-#ifdef SSL_OP_NON_EXPORT_FIRST
-    {"NON_EXPORT_FIRST", SSL_OP_NON_EXPORT_FIRST},
-#endif
-    {"NETSCAPE_DEMO_CIPHER_CHANGE_BUG", SSL_OP_NETSCAPE_DEMO_CIPHER_CHANGE_BUG},
-#ifdef SSL_OP_CRYPTOPRO_TLSEXT_BUG
-    {"CRYPTOPRO_TLSEXT_BUG", SSL_OP_CRYPTOPRO_TLSEXT_BUG},
+#ifdef SSL_OP_NO_DTLS_MASK
+    {"NO_DTLS_MASK", SSL_OP_NO_DTLS_MASK},
 #endif
 #ifdef SSL_OP_NO_DTLSv1
     {"NO_DTLSv1", SSL_OP_NO_DTLSv1},
@@ -201,26 +192,80 @@ static const SSL_OPTION ssl_opts[] = {
 #ifdef SSL_OP_NO_DTLSv1_2
     {"NO_DTLSv1_2", SSL_OP_NO_DTLSv1_2},
 #endif
-#ifdef SSL_OP_NO_SSL_MASK
-    {"NO_SSL_MASK", SSL_OP_NO_SSL_MASK},
-#endif
-#ifdef SSL_OP_NO_DTLS_MASK
-    {"NO_DTLS_MASK", SSL_OP_NO_DTLS_MASK},
-#endif
 #ifdef SSL_OP_NO_ENCRYPT_THEN_MAC
     {"NO_ENCRYPT_THEN_MAC", SSL_OP_NO_ENCRYPT_THEN_MAC},
 #endif
-#ifdef SSL_OP_ALLOW_NO_DHE_KEX
-    {"ALLOW_NO_DHE_KEX", SSL_OP_ALLOW_NO_DHE_KEX},
+#ifdef SSL_OP_NO_EXTENDED_MASTER_SECRET
+    {"NO_EXTENDED_MASTER_SECRET", SSL_OP_NO_EXTENDED_MASTER_SECRET},
 #endif
-#ifdef SSL_OP_ENABLE_MIDDLEBOX_COMPAT
-    {"ENABLE_MIDDLEBOX_COMPAT", SSL_OP_ENABLE_MIDDLEBOX_COMPAT},
+#ifdef SSL_OP_NO_QUERY_MTU
+    {"NO_QUERY_MTU", SSL_OP_NO_QUERY_MTU},
 #endif
 #ifdef SSL_OP_NO_RENEGOTIATION
     {"NO_RENEGOTIATION", SSL_OP_NO_RENEGOTIATION},
 #endif
+#ifdef SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION
+    {"NO_SESSION_RESUMPTION_ON_RENEGOTIATION", SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION},
+#endif
+#ifdef SSL_OP_NO_SSL_MASK
+    {"NO_SSL_MASK", SSL_OP_NO_SSL_MASK},
+#endif
+#ifdef SSL_OP_NO_SSLv2
+    {"NO_SSLv2", SSL_OP_NO_SSLv2},
+#endif
+#ifdef SSL_OP_NO_SSLv3
+    {"NO_SSLv3", SSL_OP_NO_SSLv3},
+#endif
+#ifdef SSL_OP_NO_TICKET
+    {"NO_TICKET", SSL_OP_NO_TICKET},
+#endif
+#ifdef SSL_OP_NO_TLSv1
+    {"NO_TLSv1", SSL_OP_NO_TLSv1},
+#endif
+#ifdef SSL_OP_NO_TLSv1_1
+    {"NO_TLSv1_1", SSL_OP_NO_TLSv1_1},
+#endif
+#ifdef SSL_OP_NO_TLSv1_2
+    {"NO_TLSv1_2", SSL_OP_NO_TLSv1_2},
+#endif
+#ifdef SSL_OP_NO_TLSv1_3
+    {"NO_TLSv1_3", SSL_OP_NO_TLSv1_3},
+#endif
+#ifdef SSL_OP_PKCS1_CHECK_1
+    {"PKCS1_CHECK_1", SSL_OP_PKCS1_CHECK_1},
+#endif
+#ifdef SSL_OP_PKCS1_CHECK_2
+    {"PKCS1_CHECK_2", SSL_OP_PKCS1_CHECK_2},
+#endif
 #ifdef SSL_OP_PRIORITIZE_CHACHA
     {"PRIORITIZE_CHACHA", SSL_OP_PRIORITIZE_CHACHA},
+#endif
+#ifdef SSL_OP_SAFARI_ECDHE_ECDSA_BUG
+    {"SAFARI_ECDHE_ECDSA_BUG", SSL_OP_SAFARI_ECDHE_ECDSA_BUG},
+#endif
+#ifdef SSL_OP_SINGLE_DH_USE
+    {"SINGLE_DH_USE", SSL_OP_SINGLE_DH_USE},
+#endif
+#ifdef SSL_OP_SINGLE_ECDH_USE
+    {"SINGLE_ECDH_USE", SSL_OP_SINGLE_ECDH_USE},
+#endif
+#ifdef SSL_OP_SSLEAY_080_CLIENT_DH_BUG
+    {"SSLEAY_080_CLIENT_DH_BUG", SSL_OP_SSLEAY_080_CLIENT_DH_BUG},
+#endif
+#ifdef SSL_OP_SSLREF2_REUSE_CERT_TYPE_BUG
+    {"SSLREF2_REUSE_CERT_TYPE_BUG", SSL_OP_SSLREF2_REUSE_CERT_TYPE_BUG},
+#endif
+#ifdef SSL_OP_TLS_BLOCK_PADDING_BUG
+    {"TLS_BLOCK_PADDING_BUG", SSL_OP_TLS_BLOCK_PADDING_BUG},
+#endif
+#ifdef SSL_OP_TLS_D5_BUG
+    {"TLS_D5_BUG", SSL_OP_TLS_D5_BUG},
+#endif
+#ifdef SSL_OP_TLSEXT_PADDING
+    {"TLSEXT_PADDING", SSL_OP_TLSEXT_PADDING},
+#endif
+#ifdef SSL_OP_TLS_ROLLBACK_BUG
+    {"TLS_ROLLBACK_BUG", SSL_OP_TLS_ROLLBACK_BUG},
 #endif
     {NULL, 0}
 };
@@ -264,7 +309,7 @@ NOEXPORT char **arg_dup(char **);
 NOEXPORT void arg_free(char **arg);
 #endif
 
-char *configuration_file=NULL;
+static char *configuration_file=NULL;
 
 GLOBAL_OPTIONS global_options;
 SERVICE_OPTIONS service_options;
@@ -281,7 +326,7 @@ static char *stunnel_cipher_list=
 
 #ifndef OPENSSL_NO_TLS1_3
 static char *stunnel_ciphersuites=
-    "TLS_CHACHA20_POLY1305_SHA256:TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256";
+    "TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256";
 #endif /* TLS 1.3 */
 
 /**************************************** parse commandline parameters */
@@ -312,12 +357,12 @@ int options_cmdline(char *arg1, char *arg2) {
             "stunnel.conf";
         type=CONF_FILE;
     } else if(!strcasecmp(arg1, "-help")) {
-        parse_global_option(CMD_PRINT_HELP, NULL, NULL);
+        parse_global_option(CMD_PRINT_HELP, NULL, NULL, NULL);
         parse_service_option(CMD_PRINT_HELP, NULL, NULL, NULL);
         log_flush(LOG_MODE_INFO);
         return 2;
     } else if(!strcasecmp(arg1, "-version")) {
-        parse_global_option(CMD_PRINT_DEFAULTS, NULL, NULL);
+        parse_global_option(CMD_PRINT_DEFAULTS, NULL, NULL, NULL);
         parse_service_option(CMD_PRINT_DEFAULTS, NULL, NULL, NULL);
         log_flush(LOG_MODE_INFO);
         return 2;
@@ -348,13 +393,14 @@ int options_cmdline(char *arg1, char *arg2) {
 
     if(type==CONF_FILE) {
 #ifdef HAVE_REALPATH
-        char *real_path=NULL;
+        char *buffer=NULL, *real_path;
 #ifdef MAXPATHLEN
         /* a workaround for pre-POSIX.1-2008 4.4BSD and Solaris */
-        real_path=malloc(MAXPATHLEN);
+        buffer=malloc(MAXPATHLEN);
 #endif
-        real_path=realpath(name, real_path);
+        real_path=realpath(name, buffer);
         if(!real_path) {
+            free(buffer);
             s_log(LOG_ERR, "Invalid configuration file name \"%s\"", name);
             ioerror("realpath");
             return 1;
@@ -379,11 +425,14 @@ int options_parse(CONF_TYPE type) {
 
     options_defaults();
     section=&new_service_options;
-    if(options_file(configuration_file, type, &section))
+    /* options_file() is a recursive function, so the last section of the
+     * configuration file section needs to be initialized separately */
+    if(options_file(configuration_file, type, &section) ||
+            init_section(1, &section)) {
+        s_log(LOG_ERR, "Configuration failed");
+        options_free(0); /* free the new options */
         return 1;
-    if(init_section(1, &section))
-        return 1;
-
+    }
     s_log(LOG_NOTICE, "Configuration successful");
     return 0;
 }
@@ -482,7 +531,7 @@ NOEXPORT int options_file(char *path, CONF_TYPE type,
         errstr=option_not_found;
         /* try global options first (e.g. for 'debug') */
         if(!new_service_options.next)
-            errstr=parse_global_option(CMD_SET_VALUE, config_opt, config_arg);
+            errstr=parse_global_option(CMD_SET_VALUE, &new_global_options, config_opt, config_arg);
         if(errstr==option_not_found)
             errstr=parse_service_option(CMD_SET_VALUE, section_ptr, config_opt, config_arg);
         if(errstr) {
@@ -505,7 +554,7 @@ NOEXPORT int init_section(int eof, SERVICE_OPTIONS **section_ptr) {
 
     if(*section_ptr==&new_service_options) {
         /* end of global options or inetd mode -> initialize globals */
-        errstr=parse_global_option(CMD_INITIALIZE, NULL, NULL);
+        errstr=parse_global_option(CMD_INITIALIZE, &new_global_options, NULL, NULL);
         if(errstr) {
             s_log(LOG_ERR, "Global options: %s", errstr);
             return 1;
@@ -514,11 +563,6 @@ NOEXPORT int init_section(int eof, SERVICE_OPTIONS **section_ptr) {
 
     if(*section_ptr!=&new_service_options || eof) {
         /* end service section or inetd mode -> initialize service */
-        if(*section_ptr==&new_service_options)
-            s_log(LOG_INFO, "Initializing inetd mode configuration");
-        else
-            s_log(LOG_INFO, "Initializing service [%s]",
-                (*section_ptr)->servname);
         errstr=parse_service_option(CMD_INITIALIZE, section_ptr, NULL, NULL);
         if(errstr) {
             if(*section_ptr==&new_service_options)
@@ -591,7 +635,7 @@ void options_defaults() {
     memset(&new_service_options, 0, sizeof(SERVICE_OPTIONS));
     new_service_options.next=NULL;
 
-    parse_global_option(CMD_SET_DEFAULTS, NULL, NULL);
+    parse_global_option(CMD_SET_DEFAULTS, &new_global_options, NULL, NULL);
     service=&new_service_options;
     parse_service_option(CMD_SET_DEFAULTS, &service, NULL, NULL);
 }
@@ -603,18 +647,32 @@ void options_apply() { /* apply default/validated configuration */
     CRYPTO_THREAD_write_lock(stunnel_locks[LOCK_SECTIONS]);
 
     memcpy(&global_options, &new_global_options, sizeof(GLOBAL_OPTIONS));
+    memset(&new_global_options, 0, sizeof(GLOBAL_OPTIONS));
 
     /* service_options are used for inetd mode and to enumerate services */
     for(section=new_service_options.next; section; section=section->next)
         section->section_number=num++;
     memcpy(&service_options, &new_service_options, sizeof(SERVICE_OPTIONS));
+    memset(&new_service_options, 0, sizeof(SERVICE_OPTIONS));
     number_of_sections=num;
 
     CRYPTO_THREAD_unlock(stunnel_locks[LOCK_SECTIONS]);
 }
 
-void options_free() {
-    parse_global_option(CMD_FREE, NULL, NULL);
+void options_free(int current) {
+    GLOBAL_OPTIONS *global=current?&global_options:&new_global_options;
+    SERVICE_OPTIONS *service=current?&service_options:&new_service_options;
+
+    parse_global_option(CMD_FREE, global, NULL, NULL);
+
+    CRYPTO_THREAD_write_lock(stunnel_locks[LOCK_SECTIONS]);
+    while(service) {
+        SERVICE_OPTIONS *tmp=service;
+        service=service->next;
+        tmp->next=NULL;
+        service_free(tmp);
+    }
+    CRYPTO_THREAD_unlock(stunnel_locks[LOCK_SECTIONS]);
 }
 
 void service_up_ref(SERVICE_OPTIONS *section) {
@@ -643,8 +701,11 @@ void service_free(SERVICE_OPTIONS *section) {
 
 /**************************************** global options */
 
-NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
+NOEXPORT char *parse_global_option(CMD cmd, GLOBAL_OPTIONS *options, char *opt, char *arg) {
     void *tmp;
+#ifdef USE_FIPS
+    static int fips_default=-1;
+#endif /* USE_FIPS */
 
     if(cmd==CMD_PRINT_DEFAULTS || cmd==CMD_PRINT_HELP) {
         s_log(LOG_NOTICE, " ");
@@ -655,19 +716,19 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
 #ifdef HAVE_CHROOT
     switch(cmd) {
     case CMD_SET_DEFAULTS:
-        new_global_options.chroot_dir=NULL;
+        options->chroot_dir=NULL;
         break;
     case CMD_SET_COPY: /* not used for global options */
         break;
     case CMD_FREE:
-        tmp=global_options.chroot_dir;
-        global_options.chroot_dir=NULL;
+        tmp=options->chroot_dir;
+        options->chroot_dir=NULL;
         str_free(tmp);
         break;
     case CMD_SET_VALUE:
         if(strcasecmp(opt, "chroot"))
             break;
-        new_global_options.chroot_dir=str_dup(arg);
+        options->chroot_dir=str_dup(arg);
         return NULL; /* OK */
     case CMD_INITIALIZE:
         break;
@@ -683,7 +744,7 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
 #ifndef OPENSSL_NO_COMP
     switch(cmd) {
     case CMD_SET_DEFAULTS:
-        new_global_options.compression=COMP_NONE;
+        options->compression=COMP_NONE;
         break;
     case CMD_SET_COPY: /* not used for global options */
         break;
@@ -699,9 +760,9 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
             return "Compression unsupported due to a memory leak";
 #endif /* OpenSSL version < 1.1.0 */
         if(!strcasecmp(arg, "deflate"))
-            new_global_options.compression=COMP_DEFLATE;
+            options->compression=COMP_DEFLATE;
         else if(!strcasecmp(arg, "zlib"))
-            new_global_options.compression=COMP_ZLIB;
+            options->compression=COMP_ZLIB;
         else
             return "Specified compression type is not available";
         return NULL; /* OK */
@@ -720,22 +781,22 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
     switch(cmd) {
     case CMD_SET_DEFAULTS:
 #ifdef EGD_SOCKET
-        new_global_options.egd_sock=EGD_SOCKET;
+        options->egd_sock=EGD_SOCKET;
 #else
-        new_global_options.egd_sock=NULL;
+        options->egd_sock=NULL;
 #endif
         break;
     case CMD_SET_COPY: /* not used for global options */
         break;
     case CMD_FREE:
-        tmp=global_options.egd_sock;
-        global_options.egd_sock=NULL;
+        tmp=options->egd_sock;
+        options->egd_sock=NULL;
         str_free(tmp);
         break;
     case CMD_SET_VALUE:
         if(strcasecmp(opt, "EGD"))
             break;
-        new_global_options.egd_sock=str_dup(arg);
+        options->egd_sock=str_dup(arg);
         return NULL; /* OK */
     case CMD_INITIALIZE:
         break;
@@ -834,7 +895,14 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
     switch(cmd) {
     case CMD_SET_DEFAULTS:
 #ifdef USE_FIPS
-        new_global_options.option.fips=0;
+        if(fips_default==-1) { /* not initialized */
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+            fips_default=EVP_default_properties_is_fips_enabled(NULL);
+#else /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+            fips_default=FIPS_mode();
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+        }
+        options->option.fips=fips_default?1:0;
 #endif /* USE_FIPS */
         break;
     case CMD_SET_COPY: /* not used for global options */
@@ -844,27 +912,34 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
     case CMD_SET_VALUE:
         if(strcasecmp(opt, "fips"))
             break;
+        if(!strcasecmp(arg, "yes")) {
 #ifdef USE_FIPS
-        if(!strcasecmp(arg, "yes"))
-            new_global_options.option.fips=1;
-        else if(!strcasecmp(arg, "no"))
-            new_global_options.option.fips=0;
-        else
-            return "The argument needs to be either 'yes' or 'no'";
+            options->option.fips=1;
 #else
-        if(strcasecmp(arg, "no"))
             return "FIPS support is not available";
 #endif /* USE_FIPS */
+        } else if(!strcasecmp(arg, "no")) {
+#ifdef USE_FIPS
+            if(fips_default)
+                return "Failed to override system-wide FIPS mode";
+            options->option.fips=0;
+#endif /* USE_FIPS */
+        } else {
+            return "The argument needs to be either 'yes' or 'no'";
+        }
         return NULL; /* OK */
     case CMD_INITIALIZE:
         break;
     case CMD_PRINT_DEFAULTS:
+#ifdef USE_FIPS
+        if(fips_available())
+            s_log(LOG_NOTICE, "%-22s = %s", "fips", fips_default?"yes":"no");
+#endif /* USE_FIPS */
         break;
     case CMD_PRINT_HELP:
-#ifdef USE_FIPS
-        s_log(LOG_NOTICE, "%-22s = yes|no FIPS 140-2 mode",
-            "fips");
-#endif /* USE_FIPS */
+        if(fips_available())
+            s_log(LOG_NOTICE, "%-22s = yes|no FIPS 140-2 mode",
+                "fips");
         break;
     }
 
@@ -872,8 +947,8 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
 #ifndef USE_WIN32
     switch(cmd) {
     case CMD_SET_DEFAULTS:
-        new_global_options.option.foreground=0;
-        new_global_options.option.log_stderr=0;
+        options->option.foreground=0;
+        options->option.log_stderr=0;
         break;
     case CMD_SET_COPY: /* not used for global options */
         break;
@@ -883,14 +958,14 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
         if(strcasecmp(opt, "foreground"))
             break;
         if(!strcasecmp(arg, "yes")) {
-            new_global_options.option.foreground=1;
-            new_global_options.option.log_stderr=1;
+            options->option.foreground=1;
+            options->option.log_stderr=1;
         } else if(!strcasecmp(arg, "quiet")) {
-            new_global_options.option.foreground=1;
-            new_global_options.option.log_stderr=0;
+            options->option.foreground=1;
+            options->option.log_stderr=0;
         } else if(!strcasecmp(arg, "no")) {
-            new_global_options.option.foreground=0;
-            new_global_options.option.log_stderr=0;
+            options->option.foreground=0;
+            options->option.log_stderr=0;
         } else
             return "The argument needs to be either 'yes', 'quiet' or 'no'";
         return NULL; /* OK */
@@ -910,7 +985,7 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
     /* iconActive */
     switch(cmd) {
     case CMD_SET_DEFAULTS:
-        new_global_options.icon[ICON_ACTIVE]=load_icon_default(ICON_ACTIVE);
+        options->icon[ICON_ACTIVE]=load_icon_default(ICON_ACTIVE);
         break;
     case CMD_SET_COPY: /* not used for global options */
         break;
@@ -920,7 +995,7 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
     case CMD_SET_VALUE:
         if(strcasecmp(opt, "iconActive"))
             break;
-        if(!(new_global_options.icon[ICON_ACTIVE]=load_icon_file(arg)))
+        if(!(options->icon[ICON_ACTIVE]=load_icon_file(arg)))
             return "Failed to load the specified icon";
         return NULL; /* OK */
     case CMD_INITIALIZE:
@@ -935,7 +1010,7 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
     /* iconError */
     switch(cmd) {
     case CMD_SET_DEFAULTS:
-        new_global_options.icon[ICON_ERROR]=load_icon_default(ICON_ERROR);
+        options->icon[ICON_ERROR]=load_icon_default(ICON_ERROR);
         break;
     case CMD_SET_COPY: /* not used for global options */
         break;
@@ -945,7 +1020,7 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
     case CMD_SET_VALUE:
         if(strcasecmp(opt, "iconError"))
             break;
-        if(!(new_global_options.icon[ICON_ERROR]=load_icon_file(arg)))
+        if(!(options->icon[ICON_ERROR]=load_icon_file(arg)))
             return "Failed to load the specified icon";
         return NULL; /* OK */
     case CMD_INITIALIZE:
@@ -960,7 +1035,7 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
     /* iconIdle */
     switch(cmd) {
     case CMD_SET_DEFAULTS:
-        new_global_options.icon[ICON_IDLE]=load_icon_default(ICON_IDLE);
+        options->icon[ICON_IDLE]=load_icon_default(ICON_IDLE);
         break;
     case CMD_SET_COPY: /* not used for global options */
         break;
@@ -970,7 +1045,7 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
     case CMD_SET_VALUE:
         if(strcasecmp(opt, "iconIdle"))
             break;
-        if(!(new_global_options.icon[ICON_IDLE]=load_icon_file(arg)))
+        if(!(options->icon[ICON_IDLE]=load_icon_file(arg)))
             return "Failed to load the specified icon";
         return NULL; /* OK */
     case CMD_INITIALIZE:
@@ -987,7 +1062,7 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
     /* log */
     switch(cmd) {
     case CMD_SET_DEFAULTS:
-        new_global_options.log_file_mode=FILE_MODE_APPEND;
+        options->log_file_mode=FILE_MODE_APPEND;
         break;
     case CMD_SET_COPY: /* not used for global options */
         break;
@@ -997,9 +1072,9 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
         if(strcasecmp(opt, "log"))
             break;
         if(!strcasecmp(arg, "append"))
-            new_global_options.log_file_mode=FILE_MODE_APPEND;
+            options->log_file_mode=FILE_MODE_APPEND;
         else if(!strcasecmp(arg, "overwrite"))
-            new_global_options.log_file_mode=FILE_MODE_OVERWRITE;
+            options->log_file_mode=FILE_MODE_OVERWRITE;
         else
             return "The argument needs to be either 'append' or 'overwrite'";
         return NULL; /* OK */
@@ -1016,25 +1091,25 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
     /* output */
     switch(cmd) {
     case CMD_SET_DEFAULTS:
-        new_global_options.output_file=NULL;
+        options->output_file=NULL;
         break;
     case CMD_SET_COPY: /* not used for global options */
         break;
     case CMD_FREE:
-        tmp=global_options.output_file;
-        global_options.output_file=NULL;
+        tmp=options->output_file;
+        options->output_file=NULL;
         str_free(tmp);
         break;
     case CMD_SET_VALUE:
         if(strcasecmp(opt, "output"))
             break;
-        new_global_options.output_file=str_dup(arg);
+        options->output_file=str_dup(arg);
         return NULL; /* OK */
     case CMD_INITIALIZE:
 #ifndef USE_WIN32
-        if(!new_global_options.option.foreground /* daemonize() used */ &&
-                new_global_options.output_file /* log file enabled */ &&
-                new_global_options.output_file[0]!='/' /* relative path */)
+        if(!options->option.foreground /* daemonize() used */ &&
+                options->output_file /* log file enabled */ &&
+                options->output_file[0]!='/' /* relative path */)
             return "Log file must include full path name";
 #endif
         break;
@@ -1049,27 +1124,27 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
 #ifndef USE_WIN32
     switch(cmd) {
     case CMD_SET_DEFAULTS:
-        new_global_options.pidfile=NULL; /* do not create a pid file */
+        options->pidfile=NULL; /* do not create a pid file */
         break;
     case CMD_SET_COPY: /* not used for global options */
         break;
     case CMD_FREE:
-        tmp=global_options.pidfile;
-        global_options.pidfile=NULL;
+        tmp=options->pidfile;
+        options->pidfile=NULL;
         str_free(tmp);
         break;
     case CMD_SET_VALUE:
         if(strcasecmp(opt, "pid"))
             break;
         if(arg[0]) /* is argument not empty? */
-            new_global_options.pidfile=str_dup(arg);
+            options->pidfile=str_dup(arg);
         else
-            new_global_options.pidfile=NULL; /* empty -> do not create a pid file */
+            options->pidfile=NULL; /* empty -> do not create a pid file */
         return NULL; /* OK */
     case CMD_INITIALIZE:
-        if(!new_global_options.option.foreground /* daemonize() used */ &&
-                new_global_options.pidfile /* pid file enabled */ &&
-                new_global_options.pidfile[0]!='/' /* relative path */)
+        if(!options->option.foreground /* daemonize() used */ &&
+                options->pidfile /* pid file enabled */ &&
+                options->pidfile[0]!='/' /* relative path */)
             return "Pid file must include full path name";
         break;
     case CMD_PRINT_DEFAULTS:
@@ -1083,7 +1158,7 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
     /* RNDbytes */
     switch(cmd) {
     case CMD_SET_DEFAULTS:
-        new_global_options.random_bytes=RANDOM_BYTES;
+        options->random_bytes=RANDOM_BYTES;
         break;
     case CMD_SET_COPY: /* not used for global options */
         break;
@@ -1094,7 +1169,7 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
             break;
         {
             char *tmp_str;
-            new_global_options.random_bytes=(long)strtol(arg, &tmp_str, 10);
+            options->random_bytes=(long)strtol(arg, &tmp_str, 10);
             if(tmp_str==arg || *tmp_str) /* not a number */
                 return "Illegal number of bytes to read from random seed files";
         }
@@ -1113,22 +1188,22 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
     switch(cmd) {
     case CMD_SET_DEFAULTS:
 #ifdef RANDOM_FILE
-        new_global_options.rand_file=str_dup(RANDOM_FILE);
+        options->rand_file=str_dup(RANDOM_FILE);
 #else
-        new_global_options.rand_file=NULL;
+        options->rand_file=NULL;
 #endif
         break;
     case CMD_SET_COPY: /* not used for global options */
         break;
     case CMD_FREE:
-        tmp=global_options.rand_file;
-        global_options.rand_file=NULL;
+        tmp=options->rand_file;
+        options->rand_file=NULL;
         str_free(tmp);
         break;
     case CMD_SET_VALUE:
         if(strcasecmp(opt, "RNDfile"))
             break;
-        new_global_options.rand_file=str_dup(arg);
+        options->rand_file=str_dup(arg);
         return NULL; /* OK */
     case CMD_INITIALIZE:
         break;
@@ -1145,7 +1220,7 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
     /* RNDoverwrite */
     switch(cmd) {
     case CMD_SET_DEFAULTS:
-        new_global_options.option.rand_write=1;
+        options->option.rand_write=1;
         break;
     case CMD_SET_COPY: /* not used for global options */
         break;
@@ -1155,9 +1230,9 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
         if(strcasecmp(opt, "RNDoverwrite"))
             break;
         if(!strcasecmp(arg, "yes"))
-            new_global_options.option.rand_write=1;
+            options->option.rand_write=1;
         else if(!strcasecmp(arg, "no"))
-            new_global_options.option.rand_write=0;
+            options->option.rand_write=0;
         else
             return "The argument needs to be either 'yes' or 'no'";
         return NULL; /* OK */
@@ -1176,7 +1251,7 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
 #ifndef USE_WIN32
     switch(cmd) {
     case CMD_SET_DEFAULTS:
-        new_global_options.option.log_syslog=1;
+        options->option.log_syslog=1;
         break;
     case CMD_SET_COPY: /* not used for global options */
         break;
@@ -1186,9 +1261,9 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
         if(strcasecmp(opt, "syslog"))
             break;
         if(!strcasecmp(arg, "yes"))
-            new_global_options.option.log_syslog=1;
+            options->option.log_syslog=1;
         else if(!strcasecmp(arg, "no"))
-            new_global_options.option.log_syslog=0;
+            options->option.log_syslog=0;
         else
             return "The argument needs to be either 'yes' or 'no'";
         return NULL; /* OK */
@@ -1207,7 +1282,7 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
 #ifdef USE_WIN32
     switch(cmd) {
     case CMD_SET_DEFAULTS:
-        new_global_options.option.taskbar=1;
+        options->option.taskbar=1;
         break;
     case CMD_SET_COPY: /* not used for global options */
         break;
@@ -1217,9 +1292,9 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
         if(strcasecmp(opt, "taskbar"))
             break;
         if(!strcasecmp(arg, "yes"))
-            new_global_options.option.taskbar=1;
+            options->option.taskbar=1;
         else if(!strcasecmp(arg, "no"))
-            new_global_options.option.taskbar=0;
+            options->option.taskbar=0;
         else
             return "The argument needs to be either 'yes' or 'no'";
         return NULL; /* OK */
@@ -1241,12 +1316,13 @@ NOEXPORT char *parse_global_option(CMD cmd, char *opt, char *arg) {
     case CMD_SET_COPY:
         break;
     case CMD_FREE:
+        memset(options, 0, sizeof(GLOBAL_OPTIONS));
         break;
     case CMD_SET_VALUE:
         return option_not_found;
     case CMD_INITIALIZE:
         /* FIPS needs to be initialized as early as possible */
-        if(ssl_configure(&new_global_options)) /* configure global TLS settings */
+        if(ssl_configure(options)) /* configure global TLS settings */
             return "Failed to initialize TLS";
     case CMD_PRINT_DEFAULTS:
         break;
@@ -1271,9 +1347,17 @@ NOEXPORT char *parse_service_option(CMD cmd, SERVICE_OPTIONS **section_ptr,
 
     if(cmd==CMD_SET_DEFAULTS || cmd==CMD_SET_COPY) {
         section->ref=1;
+        if(section==&service_options)
+            s_log(LOG_ERR, "INTERNAL ERROR: Initializing deployed section defaults");
+        else if(section==&new_service_options)
+            s_log(LOG_INFO, "Initializing inetd mode configuration");
+        else
+            s_log(LOG_INFO, "Initializing service [%s]", section->servname);
     } else if(cmd==CMD_FREE) {
-        if(section==&service_options || section==&new_service_options)
-            s_log(LOG_DEBUG, "Deallocating section defaults");
+        if(section==&service_options)
+            s_log(LOG_DEBUG, "Deallocating deployed section defaults");
+        else if(section==&new_service_options)
+            s_log(LOG_DEBUG, "Deallocating temporary section defaults");
         else
             s_log(LOG_DEBUG, "Deallocating section [%s]", section->servname);
     } else if(cmd==CMD_PRINT_DEFAULTS || cmd==CMD_PRINT_HELP) {
@@ -1554,14 +1638,14 @@ NOEXPORT char *parse_service_option(CMD cmd, SERVICE_OPTIONS **section_ptr,
         }
         break;
     case CMD_PRINT_DEFAULTS:
-#ifdef USE_FIPS
-        s_log(LOG_NOTICE, "%-22s = %s %s", "ciphers",
-            "FIPS", "(with \"fips = yes\")");
-        s_log(LOG_NOTICE, "%-22s = %s %s", "ciphers",
-            stunnel_cipher_list, "(with \"fips = no\")");
-#else
-        s_log(LOG_NOTICE, "%-22s = %s", "ciphers", stunnel_cipher_list);
-#endif /* USE_FIPS */
+        if(fips_available()) {
+            s_log(LOG_NOTICE, "%-22s = %s %s", "ciphers",
+                "FIPS", "(with \"fips = yes\")");
+            s_log(LOG_NOTICE, "%-22s = %s %s", "ciphers",
+                stunnel_cipher_list, "(with \"fips = no\")");
+        } else {
+            s_log(LOG_NOTICE, "%-22s = %s", "ciphers", stunnel_cipher_list);
+        }
         break;
     case CMD_PRINT_HELP:
         s_log(LOG_NOTICE, "%-22s = permitted ciphers for TLS 1.2 or older", "ciphers");
@@ -2470,6 +2554,33 @@ NOEXPORT char *parse_service_option(CMD cmd, SERVICE_OPTIONS **section_ptr,
         break;
     }
 
+    /* protocolHeader */
+    switch(cmd) {
+    case CMD_SET_DEFAULTS:
+        section->protocol_header=NULL;
+        break;
+    case CMD_SET_COPY:
+        name_list_dup(&section->protocol_header,
+            new_service_options.protocol_header);
+        break;
+    case CMD_FREE:
+        name_list_free(section->protocol_header);
+        break;
+    case CMD_SET_VALUE:
+        if(strcasecmp(opt, "protocolHeader"))
+            break;
+        name_list_append(&section->protocol_header, arg);
+        return NULL; /* OK */
+    case CMD_INITIALIZE:
+        break;
+    case CMD_PRINT_DEFAULTS:
+        break;
+    case CMD_PRINT_HELP:
+        s_log(LOG_NOTICE, "%-22s = custom header for protocol negotiations",
+            "protocolHeader");
+        break;
+    }
+
     /* protocolHost */
     switch(cmd) {
     case CMD_SET_DEFAULTS:
@@ -2835,6 +2946,39 @@ NOEXPORT char *parse_service_option(CMD cmd, SERVICE_OPTIONS **section_ptr,
         break;
     }
 
+#if OPENSSL_VERSION_NUMBER>=0x10100000L
+    /* securityLevel */
+    switch(cmd) {
+    case CMD_SET_DEFAULTS:
+        section->security_level=-1;
+        break;
+    case CMD_SET_COPY:
+        section->security_level=new_service_options.security_level;
+        break;
+    case CMD_FREE:
+        break;
+    case CMD_SET_VALUE:
+        if(strcasecmp(opt, "securityLevel"))
+            break;
+        {
+            char *tmp_str;
+            int tmp_int =(int)strtol(arg, &tmp_str, 10);
+            if(tmp_str==arg || *tmp_str || tmp_int<0 || tmp_int>5) /* not a correct number */
+                return "Illegal security level";
+            section->security_level = tmp_int;
+        }
+        return NULL; /* OK */
+    case CMD_INITIALIZE:
+        break;
+    case CMD_PRINT_DEFAULTS:
+        s_log(LOG_NOTICE, "%-22s = %d", "securityLevel", DEFAULT_SECURITY_LEVEL);
+        break;
+    case CMD_PRINT_HELP:
+        s_log(LOG_NOTICE, "%-22s = set the security level", "securityLevel");
+        break;
+    }
+#endif /* OpenSSL 1.1.0 or later */
+
 #ifndef USE_WIN32
     /* service */
     switch(cmd) {
@@ -2993,6 +3137,36 @@ NOEXPORT char *parse_service_option(CMD cmd, SERVICE_OPTIONS **section_ptr,
     case CMD_PRINT_HELP:
         s_log(LOG_NOTICE, "%-22s = session cache timeout (in seconds)",
             "sessionCacheTimeout");
+        break;
+    }
+
+    /* sessionResume */
+    switch(cmd) {
+    case CMD_SET_DEFAULTS:
+        section->option.session_resume=1; /* enabled by default */
+        break;
+    case CMD_SET_COPY:
+        section->option.session_resume=new_service_options.option.session_resume;
+        break;
+    case CMD_FREE:
+        break;
+    case CMD_SET_VALUE:
+        if(strcasecmp(opt, "sessionResume"))
+            break;
+        if(!strcasecmp(arg, "yes"))
+            section->option.session_resume=1;
+        else if(!strcasecmp(arg, "no"))
+            section->option.session_resume=0;
+        else
+            return "The argument needs to be either 'yes' or 'no'";
+        return NULL; /* OK */
+    case CMD_INITIALIZE:
+        break;
+    case CMD_PRINT_DEFAULTS:
+        break;
+    case CMD_PRINT_HELP:
+        s_log(LOG_NOTICE, "%-22s = yes|no enable session resumption",
+            "sessionResume");
         break;
     }
 
@@ -3546,16 +3720,6 @@ NOEXPORT char *parse_service_option(CMD cmd, SERVICE_OPTIONS **section_ptr,
     case CMD_PRINT_HELP:
         s_log(LOG_NOTICE,
             "%-22s = level of peer certificate verification", "verify");
-        s_log(LOG_NOTICE,
-            "%25slevel 0 - request and ignore peer cert", "");
-        s_log(LOG_NOTICE,
-            "%25slevel 1 - only validate peer cert if present", "");
-        s_log(LOG_NOTICE,
-            "%25slevel 2 - always require a valid peer cert", "");
-        s_log(LOG_NOTICE,
-            "%25slevel 3 - verify peer with locally installed cert", "");
-        s_log(LOG_NOTICE,
-            "%25slevel 4 - ignore CA chain and only verify peer cert", "");
         break;
     }
 
@@ -3638,7 +3802,7 @@ NOEXPORT char *parse_service_option(CMD cmd, SERVICE_OPTIONS **section_ptr,
         if(section->ctx)
             SSL_CTX_free(section->ctx);
         str_free(section->servname);
-        if(section==&service_options)
+        if(section==&service_options || section==&new_service_options)
             memset(section, 0, sizeof(SERVICE_OPTIONS));
         else
             str_free(section);
@@ -3837,7 +4001,6 @@ NOEXPORT char *tls_methods_set(SERVICE_OPTIONS *section, const char *arg) {
 }
 
 NOEXPORT char *tls_methods_check(SERVICE_OPTIONS *section) {
-    (void)section; /* squash the unused parameter warning */
 #ifdef USE_FIPS
     if(new_global_options.option.fips) {
 #ifndef OPENSSL_NO_SSL2
@@ -3853,6 +4016,8 @@ NOEXPORT char *tls_methods_check(SERVICE_OPTIONS *section) {
             return "\"sslVersion = SSLv3\" not supported in FIPS mode";
 #endif /* !OPENSSL_NO_SSL3 */
     }
+#else /* USE_FIPS */
+    (void)section; /* squash the unused parameter warning */
 #endif /* USE_FIPS */
     return NULL;
 }
@@ -4272,13 +4437,6 @@ NOEXPORT void socket_options_free(SOCK_OPT *opt) {
 
 NOEXPORT int socket_options_print(void) {
     SOCK_OPT *opt, *ptr;
-    SOCKET fd;
-    socklen_t optlen;
-    OPT_UNION val;
-    char *ta, *tl, *tr, *td;
-
-    fd=socket(AF_INET, SOCK_STREAM, 0);
-    opt=socket_options_init();
 
     s_log(LOG_NOTICE, " ");
     s_log(LOG_NOTICE, "Socket option defaults:");
@@ -4286,8 +4444,21 @@ NOEXPORT int socket_options_print(void) {
         "    Option Name         |  Accept  |   Local  |  Remote  |OS default");
     s_log(LOG_NOTICE,
         "    --------------------+----------+----------+----------+----------");
+
+    opt=socket_options_init();
     for(ptr=opt; ptr->opt_str; ++ptr) {
+        SOCKET fd;
+        socklen_t optlen;
+        OPT_UNION val;
+        char *ta, *tl, *tr, *td;
+
         /* get OS default value */
+#if defined(AF_INET6) && defined(IPPROTO_IPV6)
+        if(ptr->opt_level==IPPROTO_IPV6)
+            fd=socket(AF_INET6, SOCK_STREAM, 0);
+        else
+#endif
+            fd=socket(AF_INET, SOCK_STREAM, 0);
         optlen=sizeof val;
         if(getsockopt(fd, ptr->opt_level,
                 ptr->opt_name, (void *)&val, &optlen)) {
@@ -4304,17 +4475,19 @@ NOEXPORT int socket_options_print(void) {
             }
         } else
             td=socket_option_text(ptr->opt_type, &val);
+        closesocket(fd);
+
         /* get stunnel default values */
         ta=socket_option_text(ptr->opt_type, ptr->opt_val[0]);
         tl=socket_option_text(ptr->opt_type, ptr->opt_val[1]);
         tr=socket_option_text(ptr->opt_type, ptr->opt_val[2]);
-        /* print collected data and fee the memory */
+
+        /* print collected data and free the allocated memory */
         s_log(LOG_NOTICE, "    %-20s|%10s|%10s|%10s|%10s",
             ptr->opt_str, ta, tl, tr, td);
         str_free(ta); str_free(tl); str_free(tr); str_free(td);
     }
     socket_options_free(opt);
-    closesocket(fd);
     return 0; /* OK */
 }
 
@@ -4506,7 +4679,7 @@ NOEXPORT char *engine_open(const char *name) {
     }
     engine_initialized=0;
     if(ENGINE_ctrl(engines[current_engine], ENGINE_CTRL_SET_USER_INTERFACE,
-            0, UI_stunnel(), NULL)) {
+            0, ui_stunnel(), NULL)) {
         s_log(LOG_NOTICE, "UI set for engine #%d (%s)",
             current_engine+1, ENGINE_get_id(engines[current_engine]));
     } else {
@@ -4565,13 +4738,6 @@ NOEXPORT char *engine_init(void) {
         sslerror("ENGINE_set_default");
         return "Selecting default engine failed";
     }
-#endif
-    /* engines can add new algorithms */
-#if OPENSSL_VERSION_NUMBER>=0x10100000L
-    OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS|
-        OPENSSL_INIT_ADD_ALL_DIGESTS, NULL);
-#else
-    OpenSSL_add_all_algorithms();
 #endif
 
     s_log(LOG_INFO, "Engine #%d (%s) initialized",

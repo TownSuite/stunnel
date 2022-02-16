@@ -1,6 +1,6 @@
 /*
  *   stunnel       TLS offloading and load-balancing proxy
- *   Copyright (C) 1998-2019 Michal Trojnara <Michal.Trojnara@stunnel.org>
+ *   Copyright (C) 1998-2022 Michal Trojnara <Michal.Trojnara@stunnel.org>
  *
  *   This program is free software; you can redistribute it and/or modify it
  *   under the terms of the GNU General Public License as published by the
@@ -41,6 +41,8 @@
 #include "version.h"
 
 /**************************************** common constants */
+
+#define DEFAULT_SECURITY_LEVEL 2
 
 #define LIBWRAP_CLIENTS 5
 
@@ -102,6 +104,7 @@ typedef __int64             ssize_t;
 typedef int                 ssize_t;
 #endif /* _WIN64 */
 #endif /* !__MINGW32__ */
+#define PRIX64 "I64X"
 #define USE_IPv6
 #define _CRT_SECURE_NO_DEPRECATE
 #define _CRT_NONSTDC_NO_DEPRECATE
@@ -240,6 +243,7 @@ typedef int                 ssize_t;
 #include <ws2tcpip.h>
 
 #include <windows.h>
+#include <windowsx.h>
 
 #include <process.h>     /* _beginthread */
 #include <shlobj.h>      /* SHGetFolderPath */
@@ -409,6 +413,9 @@ extern char *sys_errlist[];
 
 /**************************************** OpenSSL headers */
 
+/* TODO: remove this after migrating to the OpenSSL 3.0 API */
+#define OPENSSL_SUPPRESS_DEPRECATED
+
 #define OPENSSL_THREAD_DEFINES
 #include <openssl/opensslconf.h>
 /* opensslv.h requires prior opensslconf.h to include -fips in version string */
@@ -460,7 +467,7 @@ extern char *sys_errlist[];
 #define OPENSSL_NO_TLS1_3
 #endif /* OpenSSL older than 1.1.1 */
 
-#if defined(USE_WIN32) && defined(OPENSSL_FIPS)
+#ifdef USE_WIN32
 #define USE_FIPS
 #endif
 
@@ -493,6 +500,9 @@ int DH_set0_pqg(DH *dh, BIGNUM *p, BIGNUM *q, BIGNUM *g);
 /* not defined in public headers before OpenSSL 0.9.8 */
 STACK_OF(SSL_COMP) *SSL_COMP_get_compression_methods(void);
 #endif /* !defined(OPENSSL_NO_COMP) */
+#if OPENSSL_VERSION_NUMBER>=0x30000000L
+#include <openssl/provider.h>
+#endif /* OPENSSL_VERSION_NUMBER>=0x30000000L */
 
 #ifndef OPENSSL_VERSION
 #define OPENSSL_VERSION SSLEAY_VERSION
@@ -524,6 +534,8 @@ STACK_OF(SSL_COMP) *SSL_COMP_get_compression_methods(void);
 #ifndef offsetof
 #define offsetof(T, F) ((unsigned)((char *)&((T *)0L)->F - (char *)0L))
 #endif
+
+#define is_prefix(a, b) (strncasecmp((a), (b), strlen(b))==0)
 
 #endif /* defined COMMON_H */
 

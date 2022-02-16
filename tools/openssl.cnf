@@ -1,5 +1,25 @@
 # OpenSSL configuration file to create a server certificate
-# by Michal Trojnara 1998-2019
+# by Michal Trojnara 1998-2022
+
+# Use this in order to automatically load providers.
+openssl_conf = openssl_init
+
+# Comment out the next line to ignore configuration errors
+config_diagnostics = 1
+
+# For FIPS
+#.include "../config/fipsmodule.cnf"
+
+[openssl_init]
+providers = provider_sect
+
+# List of providers to load
+[provider_sect]
+default = default_sect
+#fips = fips_sect
+
+[default_sect]
+activate = 1
 
 [ req ]
 # comment out the next line to protect the private key with a passphrase
@@ -11,10 +31,10 @@ x509_extensions                 = stunnel_extensions
 distinguished_name              = stunnel_dn
 
 [ stunnel_extensions ]
-nsCertType                      = server
+nsCertType                      = server, client
 basicConstraints                = CA:TRUE,pathlen:0
-keyUsage                        = keyCertSign
-extendedKeyUsage                = serverAuth
+keyUsage                        = keyCertSign, digitalSignature, keyEncipherment
+extendedKeyUsage                = serverAuth, clientAuth
 nsComment                       = "stunnel self-signed certificate"
 
 [ stunnel_dn ]

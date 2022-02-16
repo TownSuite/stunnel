@@ -1,6 +1,6 @@
 /*
  *   stunnel       TLS offloading and load-balancing proxy
- *   Copyright (C) 1998-2019 Michal Trojnara <Michal.Trojnara@stunnel.org>
+ *   Copyright (C) 1998-2022 Michal Trojnara <Michal.Trojnara@stunnel.org>
  *
  *   This program is free software; you can redistribute it and/or modify it
  *   under the terms of the GNU General Public License as published by the
@@ -38,7 +38,7 @@
 #include "common.h"
 #include "prototypes.h"
 
-#define is_prefix(a, b) (strncasecmp((a), (b), strlen(b))==0)
+#define CAPWIN_BUFFER_SIZE 100
 
 /* protocol-specific function prototypes */
 NOEXPORT char *socks_client(CLI *, SERVICE_OPTIONS *, const PHASE);
@@ -64,15 +64,26 @@ NOEXPORT char *pop3_server(CLI *, SERVICE_OPTIONS *, const PHASE);
 NOEXPORT char *imap_client(CLI *, SERVICE_OPTIONS *, const PHASE);
 NOEXPORT char *imap_server(CLI *, SERVICE_OPTIONS *, const PHASE);
 NOEXPORT char *nntp_client(CLI *, SERVICE_OPTIONS *, const PHASE);
+NOEXPORT char *ldap_client(CLI *, SERVICE_OPTIONS *, const PHASE);
 NOEXPORT char *connect_server(CLI *, SERVICE_OPTIONS *, const PHASE);
 NOEXPORT char *connect_client(CLI *, SERVICE_OPTIONS *, const PHASE);
 #ifndef OPENSSL_NO_MD4
 NOEXPORT void ntlm(CLI *, SERVICE_OPTIONS *);
 NOEXPORT char *ntlm1();
 NOEXPORT char *ntlm3(char *, char *, char *, char *);
-NOEXPORT void crypt_DES(DES_cblock, DES_cblock, DES_cblock);
+NOEXPORT void crypt_DES(DES_cblock, DES_cblock, unsigned char[7]);
 #endif
 NOEXPORT char *base64(int, const char *, int);
+NOEXPORT char *capwin_server(CLI *, SERVICE_OPTIONS *, const PHASE);
+NOEXPORT char *capwin_client(CLI *, SERVICE_OPTIONS *, const PHASE);
+NOEXPORT char *capwinctrl_client(CLI *, SERVICE_OPTIONS *, const PHASE);
+
+/* global state */
+NOEXPORT char capwin_auth[CAPWIN_BUFFER_SIZE]={0};
+#ifdef USE_WIN32
+HWND capwin_hwnd=NULL;
+LONG capwin_connectivity=0;
+#endif
 
 /**************************************** framework */
 
@@ -113,10 +124,22 @@ char *protocol(CLI *c, SERVICE_OPTIONS *opt, const PHASE phase) {
         return opt->option.client ?
             nntp_client(c, opt, phase) :
             "The 'nntp' protocol is not supported in the server mode";
+    if(!strcasecmp(opt->protocol, "ldap"))
+        return opt->option.client ?
+            ldap_client(c, opt, phase) :
+            "The 'ldap' protocol is not supported in the server mode";
     if(!strcasecmp(opt->protocol, "connect"))
         return opt->option.client ?
             connect_client(c, opt, phase) :
             connect_server(c, opt, phase);
+    if(!strcasecmp(opt->protocol, "capwin"))
+        return opt->option.client ?
+            capwin_client(c, opt, phase) :
+            capwin_server(c, opt, phase);
+    if(!strcasecmp(opt->protocol, "capwinctrl"))
+        return opt->option.client ?
+            capwinctrl_client(c, opt, phase) :
+            "The 'capwinctrl' protocol is not supported in the server mode";
     return "Protocol not supported";
 }
 
@@ -647,7 +670,7 @@ NOEXPORT char *cifs_server(CLI *c, SERVICE_OPTIONS *opt, const PHASE phase) {
     (void)opt; /* squash the unused parameter warning */
     if(phase!=PROTOCOL_EARLY)
         return NULL;
-    s_read(c, c->local_rfd.fd, buffer, 4) ;/* NetBIOS header */
+    s_read(c, c->local_rfd.fd, buffer, 4); /* NetBIOS header */
     len=(uint16_t)(((uint16_t)(buffer[2])<<8)|buffer[3]);
     if(len>sizeof buffer-4) {
         s_log(LOG_ERR, "Received block too long");
@@ -686,17 +709,31 @@ NOEXPORT char *pgsql_client(CLI *c, SERVICE_OPTIONS *opt, const PHASE phase) {
 
 NOEXPORT char *pgsql_server(CLI *c, SERVICE_OPTIONS *opt, const PHASE phase) {
     uint8_t buffer[8], ssl_ok[1]={'S'};
+    /* https://www.postgresql.org/docs/current/protocol-message-formats.html */
+    static const uint8_t gss_request[8]={0, 0, 0, 8, 0x04, 0xd2, 0x16, 0x30};
+    static const uint8_t gss_response[62]=
+        {'E', 0, 0, 0, 61, 'S', 'E', 'R', 'R', 'O', 'R', 0, 'C', 'X', 'X', '0',
+        '0', '0', 0, 'M', 'S', 'S', 'L', ' ', 'e', 'x', 'p', 'e', 'c', 't', 'e', 'd',
+        ' ', 'b', 'u', 't', ' ', 'n', 'o', 't', ' ', 'r', 'e', 'q', 'u', 'e', 's', 't',
+        'e', 'd', ' ', 'b', 'y', ' ', 'c', 'l', 'i', 'e', 'n', 't', 0, 0};
 
     (void)opt; /* squash the unused parameter warning */
     if(phase!=PROTOCOL_EARLY)
         return NULL;
+    s_log(LOG_DEBUG, "Started server-side psql protocol negotiation");
     memset(buffer, 0, sizeof buffer);
     s_read(c, c->local_rfd.fd, buffer, sizeof buffer);
+    if(!safe_memcmp(buffer, gss_request, sizeof gss_request)) {
+        s_log(LOG_INFO, "GSSAPI encryption requested, rejecting gracefully");
+        s_write(c, c->local_wfd.fd, gss_response, sizeof gss_response);
+        throw_exception(c, 2); /* don't reset */
+    }
     if(safe_memcmp(buffer, ssl_request, sizeof ssl_request)) {
         s_log(LOG_ERR, "PostgreSQL client did not request TLS, rejecting");
         /* no way to send error on startup, so just drop the client */
         throw_exception(c, 1);
     }
+    s_log(LOG_DEBUG, "SSLRequest received");
     s_write(c, c->local_wfd.fd, ssl_ok, sizeof ssl_ok);
     return NULL;
 }
@@ -713,7 +750,10 @@ NOEXPORT char *smtp_client(CLI *c, SERVICE_OPTIONS *opt, const PHASE phase) {
         if(opt->protocol_username && opt->protocol_password) {
             char *line;
 
-            ssl_putline(c, "HELO localhost");
+            if(opt->protocol_host)
+                ssl_printf(c, "HELO %s", opt->protocol_host);
+            else
+                ssl_putline(c, "HELO localhost");
             line=ssl_getline(c); /* ignore the reply */
             str_free(line);
             if(!strcasecmp(c->opt->protocol_authentication, "LOGIN"))
@@ -740,7 +780,10 @@ NOEXPORT void smtp_client_negotiate(CLI *c) {
         fd_putline(c, c->local_wfd.fd, line);
     } while(is_prefix(line, "220-"));
 
-    fd_putline(c, c->remote_fd.fd, "EHLO localhost");
+    if(c->opt->protocol_host)
+        fd_printf(c, c->remote_fd.fd, "EHLO %s", c->opt->protocol_host);
+    else
+        fd_putline(c, c->remote_fd.fd, "EHLO localhost");
     do { /* skip multiline reply */
         str_free(line);
         line=fd_getline(c, c->remote_fd.fd);
@@ -976,9 +1019,9 @@ NOEXPORT char *imap_client(CLI *c, SERVICE_OPTIONS *opt, const PHASE phase) {
         str_free(line);
         throw_exception(c, 1);
     }
-    fd_putline(c, c->local_wfd.fd, line);
-    fd_putline(c, c->remote_fd.fd, "stunnel STARTTLS");
     str_free(line);
+    fd_putline(c, c->local_wfd.fd, "* OK Connected.");
+    fd_putline(c, c->remote_fd.fd, "stunnel STARTTLS");
     line=fd_getline(c, c->remote_fd.fd);
     if(!is_prefix(line, "stunnel OK")) {
         fd_putline(c, c->local_wfd.fd,
@@ -1119,6 +1162,132 @@ NOEXPORT char *nntp_client(CLI *c, SERVICE_OPTIONS *opt, const PHASE phase) {
     return NULL;
 }
 
+/**************************************** LDAP, RFC 2830 */
+
+uint8_t ldap_starttls_message[0x1d + 2] = {
+    0x30,   /* tag = UNIVERSAL SEQUENCE */
+    0x1d,   /* len = 29 */
+    0x02,   /*   tag = INTEGER (messageID) */
+    0x01,   /*   len = 1 */
+    0x01,   /*   val = 1 (this is messageID 1) */
+    0x77,   /*   tag = APPLICATION 23 (ExtendedRequest)
+             *     0b01xxxxxx =>  Class = Application
+             *     0bxx1xxxxx =>    P/C = Constructed
+             *     0bxxx10111 => Number = 23 */
+    0x18,   /*   len = 24 */
+    0x80,   /*     tag = CONTEXT-SPECIFIC 0 (requestName) */
+    0x16,   /*     len = 22 */
+            /*     val = LDAP_START_TLS_OID
+             *       OID: 1.3.6.1.4.1.1466.20037 */
+    '1', '.',
+    '3', '.',
+    '6', '.',
+    '1', '.',
+    '4', '.',
+    '1', '.',
+    '1', '4', '6', '6', '.',
+    '2', '0', '0', '3', '7'
+    /* no requestValue, as per RFC2830
+     * (section 2.1: "The requestValue field is absent") */
+};
+
+#define LDAP_UNIVERSAL_SEQUENCE                 0x30
+#define LDAP_WINLDAP_FOUR_BYTE_LEN_FLAG         0x84
+#define LDAP_RESPONSE_MSG_ID_TAG_INTEGER        0x02
+#define LDAP_RESPONSE_MSG_ID_LEN                0x01
+#define LDAP_RESPONSE_MSG_ID_VAL                0x01
+#define LDAP_RESPONSE_OP_APPLICATION_24         0x78
+#define LDAP_RESPONSE_RESULT_TAG_ENUMERATED     0x0a
+#define LDAP_RESPONSE_RESULT_LEN                0x01
+#define LDAP_RESPONSE_RESULT_VAL_SUCCESS        0x00
+
+/* also see:
+ * https://ldap.com/ldapv3-wire-protocol-reference-extended/
+ */
+
+NOEXPORT char *ldap_client(CLI *c, SERVICE_OPTIONS *opt, const PHASE phase) {
+    uint8_t buffer_8;
+    uint32_t buffer_32;
+    size_t resp_len;
+    uint8_t ldap_response[128];
+    size_t resp_idx;
+
+    (void)opt; /* squash the unused parameter warning */
+
+    if(phase!=PROTOCOL_MIDDLE)
+        return NULL;
+
+    s_log(LOG_DEBUG, "Sending LDAP Start TLS request");
+    s_write(c, c->remote_fd.fd, ldap_starttls_message, sizeof(ldap_starttls_message));
+
+    s_log(LOG_DEBUG, "Receiving LDAP response tag");
+    s_read(c, c->remote_fd.fd, &buffer_8, 1);
+    if(buffer_8!=LDAP_UNIVERSAL_SEQUENCE) {
+        s_log(LOG_ERR, "LDAP response is not UNIVERSAL SEQUENCE");
+        throw_exception(c, 1);
+    }
+
+    s_log(LOG_DEBUG, "Receiving LDAP response length");
+    s_read(c, c->remote_fd.fd, &buffer_8, 1);
+    if(buffer_8==LDAP_WINLDAP_FOUR_BYTE_LEN_FLAG) { /* WinLDAP */
+        /* receive response length (4 bytes, network byte order) */
+        s_read(c, c->remote_fd.fd, &buffer_32, 4);
+        resp_len=ntohl(buffer_32);
+    } else {
+        resp_len=buffer_8;
+    }
+    if(resp_len>sizeof(ldap_response)) {
+        s_log(LOG_ERR, "LDAP response too long (%lu byte(s))",
+            (unsigned long)resp_len);
+        throw_exception(c, 1);
+    }
+
+    s_log(LOG_DEBUG, "Receiving LDAP response value (%lu byte(s))",
+        (unsigned long)resp_len);
+    memset(ldap_response, 0, sizeof(ldap_response)); /* prevent data leaks */
+    s_read(c, c->remote_fd.fd, ldap_response, resp_len);
+
+    s_log(LOG_DEBUG, "Decoding LDAP response value");
+    resp_idx=0;
+    if(ldap_response[resp_idx++]!=LDAP_RESPONSE_MSG_ID_TAG_INTEGER) {
+        s_log(LOG_ERR, "LDAP response has an incorrect message ID type");
+        throw_exception(c, 1);
+    }
+    if(ldap_response[resp_idx++]!=LDAP_RESPONSE_MSG_ID_LEN) {
+        s_log(LOG_ERR, "LDAP response has an unexpected message ID length");
+        throw_exception(c, 1);
+    }
+    if(ldap_response[resp_idx++]!=LDAP_RESPONSE_MSG_ID_VAL) {
+        s_log(LOG_ERR, "LDAP response has an unexpected message ID value");
+        throw_exception(c, 1);
+    }
+    if(ldap_response[resp_idx++]!=LDAP_RESPONSE_OP_APPLICATION_24) {
+        s_log(LOG_ERR, "LDAP response protocol op is not ExtendedResponse");
+        throw_exception(c, 1);
+    }
+    /* we do not validate the protocol op sequence length */
+    if(ldap_response[resp_idx++]==LDAP_WINLDAP_FOUR_BYTE_LEN_FLAG) { /* WinLDAP */
+        resp_idx+=4; /* skip next 4 bytes */
+    }
+    if(ldap_response[resp_idx++]!=LDAP_RESPONSE_RESULT_TAG_ENUMERATED) {
+        s_log(LOG_ERR, "LDAP response has an unexpected result code type");
+        throw_exception(c, 1);
+    }
+    if(ldap_response[resp_idx++]!=LDAP_RESPONSE_RESULT_LEN) {
+        s_log(LOG_ERR, "LDAP response has an unexpected result code length");
+        throw_exception(c, 1);
+    }
+    if(ldap_response[resp_idx]!=LDAP_RESPONSE_RESULT_VAL_SUCCESS) {
+        s_log(LOG_ERR, "LDAP response has indicated an error (%u)",
+            ldap_response[resp_idx]);
+        throw_exception(c, 1);
+    }
+    /* any remaining data is ignored */
+
+    s_log(LOG_INFO, "LDAP Start TLS successfully negotiated");
+    return NULL;
+}
+
 /**************************************** connect */
 
 NOEXPORT char *connect_server(CLI *c, SERVICE_OPTIONS *opt, const PHASE phase) {
@@ -1168,9 +1337,11 @@ NOEXPORT char *connect_server(CLI *c, SERVICE_OPTIONS *opt, const PHASE phase) {
 
 NOEXPORT char *connect_client(CLI *c, SERVICE_OPTIONS *opt, const PHASE phase) {
     char *line, *encoded;
+    NAME_LIST *ptr;
 
     if(phase!=PROTOCOL_MIDDLE)
         return NULL;
+
     if(!opt->protocol_host) {
         s_log(LOG_ERR, "protocolHost not specified");
         throw_exception(c, 1);
@@ -1200,7 +1371,10 @@ NOEXPORT char *connect_client(CLI *c, SERVICE_OPTIONS *opt, const PHASE phase) {
             str_free(encoded);
         }
     }
+    for(ptr=opt->protocol_header; ptr; ptr=ptr->next)
+        fd_putline(c, c->remote_fd.fd, ptr->name); /* custom header */
     fd_putline(c, c->remote_fd.fd, ""); /* empty line */
+
     line=fd_getline(c, c->remote_fd.fd);
     if(!is_prefix(line, "HTTP/1.0 2") && !is_prefix(line, "HTTP/1.1 2")) {
         /* not "HTTP/1.x 2xx Connection established" */
@@ -1418,7 +1592,7 @@ NOEXPORT char *base64(int encode, const char *in, int len) {
     BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
     bio=BIO_new(BIO_s_mem());
     if(!bio) {
-        str_free(b64);
+        BIO_free(b64);
         return NULL;
     }
     if(encode)
@@ -1443,6 +1617,252 @@ NOEXPORT char *base64(int encode, const char *in, int len) {
     }
     BIO_free_all(bio);
     return out;
+}
+
+/**************************************** capwin authentication support */
+
+NOEXPORT int capwin_decode(const char *src,
+        char **cmd, char **user, char **pass, char **ctrl) {
+    char *us1, *us2, *us3, *fs;
+
+    us1=strchr(src, '\x1f');
+    if(!us1) {
+        s_log(LOG_ERR, "CapWIN: Malformed credentials (1)");
+        return 1; /* FAILED */
+    }
+    us2=strchr(us1 + 1, '\x1f');
+    if(!us2) {
+        s_log(LOG_ERR, "CapWIN: Malformed credentials (2)");
+        return 1; /* FAILED */
+    }
+    us3=strchr(us2 + 1, '\x1f');
+    if(!us3) {
+        s_log(LOG_ERR, "CapWIN: Malformed credentials (3)");
+        return 1; /* FAILED */
+    }
+    fs=strchr(us3 + 1, '\x1c');
+    if(!fs) {
+        s_log(LOG_ERR, "CapWIN: Malformed credentials (4)");
+        return 1; /* FAILED */
+    }
+    if(cmd) {
+        size_t len=(size_t)(us1 - src);
+        *cmd=str_alloc(len + 1);
+        memcpy(*cmd, src, len);
+    }
+    if(user) {
+        size_t len=(size_t)(us2 - us1) - 1;
+        *user=str_alloc(len + 1);
+        memcpy(*user, us1 + 1, len);
+    }
+    if(pass) {
+        size_t len=(size_t)(us3 - us2) - 1;
+        *pass=str_alloc(len + 1);
+        memcpy(*pass, us2 + 1, len);
+    }
+    if(ctrl) {
+        size_t len=(size_t)(fs - us3) - 1;
+        *ctrl=str_alloc(len + 1);
+        memcpy(*ctrl, us3 + 1, len);
+    }
+    return 0; /* SUCCESS */
+}
+
+NOEXPORT int ldap_auth(CLI *c, const char *dn, const char *pass) {
+    size_t dn_len, pass_len, req_len;
+    SOCKADDR_UNION addr;
+    int i;
+    unsigned char *req, resp[22];
+    const unsigned char resp_ok[22]=
+        "\x30\x84\x00\x00\x00\x10\x02\x01\x01\x61\x84"
+        "\x00\x00\x00\x07\x0a\x01\x00\x04\x00\x04\x00";
+
+    /* reject parameters too long for simple encoding */
+    dn_len=strlen(dn);
+    pass_len=strlen(pass);
+    req_len=dn_len + pass_len + 14;
+    if(req_len > 120) {
+        s_log(LOG_ERR, "LDAP: Request too long");
+        return 1; /* FAILED */
+    }
+
+    /* connect the configured LDAP server */
+    if(!name2addr(&addr, c->opt->protocol_host, 0)) {
+        s_log(LOG_ERR, "LDAP: Failed to resolve protocolHost");
+        return 1; /* FAILED */
+    }
+    c->fd=s_socket(addr.sa.sa_family, SOCK_STREAM, 0, 1, "LDAP socket");
+    if(c->fd==INVALID_SOCKET)
+        return 1; /* FAILED */
+    s_log(LOG_DEBUG, "LDAP: Connecting the server");
+    if(s_connect(c, &addr, addr_len(&addr))) {
+        closesocket(c->fd);
+        c->fd=INVALID_SOCKET; /* avoid double close on cleanup */
+        return 1; /* FAILED */
+    }
+
+    /* send BindRequest */
+    req=str_alloc(req_len);
+    i=0;
+    req[i++]=0x30; /* SEQUENCE */
+    req[i++]=(unsigned char)(dn_len + pass_len + 12);
+    req[i++]=0x02; /* INTEGER */
+    req[i++]=0x01; /* length */
+    req[i++]=0x01; /* MessageID */
+    req[i++]=0x60; /* [APPLICATION 0]: BindRequest */
+    req[i++]=(unsigned char)(dn_len + pass_len + 7);
+    req[i++]=0x02; /* INTEGER */
+    req[i++]=0x01; /* length */
+    req[i++]=0x03; /* LDAP protocol version */
+    req[i++]=0x04; /* OCTET STRING */
+    req[i++]=(unsigned char)dn_len;
+    memcpy(req + i, dn, dn_len);
+    i+=(int)dn_len;
+    req[i++]=0x80; /* [IMPLICIT 0]: simple authentication */
+    req[i++]=(unsigned char)pass_len;
+    memcpy(req + i, pass, pass_len);
+    s_log(LOG_DEBUG, "LDAP: Sending BindRequest");
+    s_write(c, c->fd, req, req_len);
+    str_free(req);
+
+    /* receive BindResponse */
+    s_log(LOG_DEBUG, "LDAP: Waiting for BindResponse");
+    s_read(c, c->fd, resp, sizeof resp);
+    closesocket(c->fd);
+    c->fd=INVALID_SOCKET; /* avoid double close on cleanup */
+    return memcmp(resp, resp_ok, sizeof resp);
+}
+
+NOEXPORT char *ldap_escape_dn(const char *src) {
+    int i=0, j=0;
+    char *dst=str_alloc(2 * strlen(src) + 1);
+
+    while(src[i]) {
+        if(strchr("+;,\\\"<>#", src[i]))
+            dst[j++]='\\';
+        dst[j++]=src[i++];
+    }
+    return dst;
+}
+
+NOEXPORT char *capwin_server(CLI *c, SERVICE_OPTIONS *opt, const PHASE phase) {
+    char *buffer, *user, *pass, *esc_user, *dn;
+    const char *success="BINGO", *failure="FAILED";
+    int i;
+
+    (void)opt; /* squash the unused parameter warning */
+    switch(phase) {
+    case PROTOCOL_MIDDLE: /* TLS is established */
+        buffer=str_alloc(CAPWIN_BUFFER_SIZE);
+        for(i=0; i<CAPWIN_BUFFER_SIZE - 1; ++i) {
+            s_ssl_read(c, buffer+i, 1);
+            if(buffer[i] == '\x1c')
+                break;
+        }
+        if(capwin_decode(buffer, NULL, &user, &pass, NULL)) {
+            /* malformed request: reset instead of sending "FAILED" */
+            str_free(buffer);
+            throw_exception(c, 1);
+        }
+        str_free(buffer);
+        esc_user=ldap_escape_dn(user);
+        str_free(user);
+        dn=str_printf("uid=%s,ou=people,O=CAPWIN,C=US", esc_user);
+        str_free(esc_user);
+        if(ldap_auth(c, dn, pass)) {
+            str_free(dn);
+            str_free(pass);
+            s_log(LOG_ERR, "CapWIN: Authentication failed");
+            s_ssl_write(c, failure, (int)strlen(failure));
+            throw_exception(c, 2); /* don't reset */
+        }
+        str_free(dn);
+        str_free(pass);
+        s_log(LOG_NOTICE, "CapWIN: Authentication succeeded");
+        break;
+    case PROTOCOL_LATE: /* remote host is connected */
+        s_ssl_write(c, success, (int)strlen(success));
+        break;
+    default:
+        break;
+    }
+    return NULL;
+}
+
+NOEXPORT char *capwin_client(CLI *c, SERVICE_OPTIONS *opt, const PHASE phase) {
+    char *cmd, *user, *pass, *ctrl, *req, resp[5];
+
+    (void)opt; /* squash the unused parameter warning */
+    if(phase!=PROTOCOL_LATE)
+        return NULL;
+
+    /* we extract the username and the password to work around a bug in the
+     * original server-side code that required unused units to be empty */
+    /* otherwise, we could simply forward capwin_auth directly */
+    if(!capwin_auth[0]) {
+        s_log(LOG_ERR, "CapWIN: No credentials set");
+        throw_exception(c, 1);
+    }
+    if(capwin_decode(capwin_auth, &cmd, &user, &pass, &ctrl))
+        throw_exception(c, 1);
+    if(strcmp(cmd, "AUTH")) {
+        s_log(LOG_ERR, "CapWIN: Invalid authentication request");
+        str_free(cmd);
+        str_free(user);
+        str_free(pass);
+        str_free(ctrl);
+        throw_exception(c, 1);
+    }
+    str_free(cmd);
+    req=str_printf("\x1f%s\x1f%s\x1f\x1c", user, pass);
+    str_free(user);
+    str_free(pass);
+#ifdef USE_WIN32
+    capwin_hwnd=(HWND)(uintptr_t)atoi(ctrl);
+#endif
+    str_free(ctrl);
+
+    s_log(LOG_DEBUG, "CapWIN: Sending credentials");
+    s_ssl_write(c, req, (int)strlen(req));
+    str_free(req);
+
+    s_log(LOG_DEBUG, "CapWIN: Waiting for response");
+    s_ssl_read(c, resp, sizeof resp);
+#ifdef USE_WIN32
+    /* we received a response, so network is up */
+    if(!InterlockedExchange(&capwin_connectivity, 1))
+        PostMessage(capwin_hwnd, WM_CAPWIN_NET_UP, 0, 0);
+#endif
+    if(memcmp(resp, "BINGO", sizeof resp)) {
+        s_log(LOG_ERR, "CapWIN: Authentication failed");
+#ifdef USE_WIN32
+        PostMessage(capwin_hwnd, WM_CAPWIN_AUTH_FAIL, 0, 0);
+#endif
+        throw_exception(c, 1);
+    }
+    s_log(LOG_NOTICE, "CapWIN: Authentication succeeded");
+#ifdef USE_WIN32
+    PostMessage(capwin_hwnd, WM_CAPWIN_AUTH_OK, 0, 0);
+#endif
+    return NULL;
+}
+
+NOEXPORT char *capwinctrl_client(CLI *c, SERVICE_OPTIONS *opt, const PHASE phase) {
+    switch(phase) {
+    case PROTOCOL_CHECK:
+        opt->option.protocol_endpoint=1;
+        break;
+    case PROTOCOL_EARLY:
+        s_log(LOG_DEBUG, "CapWIN: Setting credentials");
+        memset(capwin_auth, 0, CAPWIN_BUFFER_SIZE);
+        s_read_eof(c, c->local_rfd.fd, capwin_auth, CAPWIN_BUFFER_SIZE - 1);
+        s_log(LOG_NOTICE, "CapWIN: Credentials set");
+        /* skip connecting a remote host */
+        throw_exception(c, 2); /* don't reset */
+    default:
+        break;
+    }
+    return NULL;
 }
 
 /* end of protocol.c */

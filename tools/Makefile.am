@@ -1,11 +1,11 @@
 ## Process this file with automake to produce Makefile.in
-# by Michal Trojnara 1998-2019
+# by Michal Trojnara 1998-2022
 
 EXTRA_DIST = ca.html ca.pl importCA.html importCA.sh script.sh makecert.sh
 EXTRA_DIST += openssl.cnf stunnel.nsi stunnel.license stunnel.conf
 EXTRA_DIST += stunnel.conf-sample.in stunnel.init.in stunnel.service.in
 EXTRA_DIST += stunnel.logrotate stunnel.rh.init stunnel.spec
-EXTRA_DIST += plugins ca-certs.pem
+EXTRA_DIST += ca-certs.pem
 
 confdir = $(sysconfdir)/stunnel
 conf_DATA = stunnel.conf-sample
@@ -15,6 +15,10 @@ examplesdir = $(docdir)/examples
 examples_DATA = stunnel.init stunnel.service
 examples_DATA += stunnel.logrotate stunnel.rh.init stunnel.spec
 examples_DATA += ca.html ca.pl importCA.html importCA.sh script.sh
+
+# bash completion script
+bashcompdir = @bashcompdir@
+dist_bashcomp_DATA = stunnel.bash
 
 CLEANFILES = stunnel.conf-sample stunnel.init stunnel.service
 

@@ -1,6 +1,113 @@
 # stunnel change log
 
 
+### Version 5.62, 2022.01.17, urgency: MEDIUM
+* New features
+  - Added a bash completion script.
+* Bugfixes
+  - Fixed a transfer() loop bug.
+
+### Version 5.61, 2021.12.22, urgency: LOW
+* New features sponsored by the University of Maryland
+  - Added new "protocol = capwin" and "protocol = capwinctrl"
+    configuration file options.
+* New features for the Windows platform
+  - Added client mode allowing authenticated users to view
+    logs, reconfigure and terminate running stunnel services.
+  - Added support for multiple GUI and service instances
+    distinguised by the location of stunnel.conf.
+  - Improved log window scrolling.
+  - Added a new 'Pause auto-scroll' GUI checkbox.
+  - Double click on the icon tray replaced with single click.
+  - OpenSSL DLLs updated to version 3.0.1.
+* Other new features
+  - Rewritten the testing framework in python (thx to
+    Peter Pentchev for inspiration and initial framework).
+  - Added support for missing SSL_set_options() values.
+  - Updated stunnel.spec to support RHEL8.
+* Bugfixes
+  - Fixed OpenSSL 3.0 build.
+  - Fixed reloading configuration with
+    "systemctl reload stunnel.service".
+  - Fixed incorrect messages logged for OpenSSL errors.
+  - Fixed printing IPv6 socket option defaults on FreeBSD.
+
+### Version 5.60, 2021.08.16, urgency: LOW
+* New features
+  - New 'sessionResume' service-level option to allow
+    or disallow session resumption
+  - Added support for the new SSL_set_options() values.
+  - Download fresh ca-certs.pem for each new release.
+* Bugfixes
+  - Fixed 'redirect' with 'protocol'.  This combination is
+    not supported by 'smtp', 'pop3' and 'imap' protocols.
+  - Enforced minimum WIN32 log window size.
+  - Fixed support for password-protected private keys with
+    OpenSSL 3.0 (thx to Dmitry Belyavskiy).
+
+### Version 5.59, 2021.04.05, urgency: HIGH
+* Security bugfixes
+  - OpenSSL DLLs updated to version 1.1.1k.
+* New features
+  - Client-side "protocol = ldap" support (thx to Bart
+    Dopheide and Seth Grover).
+* Bugfixes
+  - The test suite fixed not to require external connectivity.
+  - Fixed paths in generated manuals (thx to Tatsuki Makino).
+  - Fixed configuration reload when compression is used.
+  - Fixed compilation with early releases of OpenSSL 1.1.1.
+
+### Version 5.58, 2021.02.20, urgency: HIGH
+* Security bugfixes
+  - The "redirect" option was fixed to properly handle
+    unauthenticated requests (thx to Martin Stein).
+  - Fixed a double free with OpenSSL older than 1.1.0 (thx to
+    Petr Strukov).
+  - OpenSSL DLLs updated to version 1.1.1j.
+* New features
+  - New 'protocolHeader' service-level option to insert custom
+    'connect' protocol negotiation headers.  This feature can
+    be used to impersonate other software (e.g. web browsers).
+  - 'protocolHost' can also be used to control the client SMTP
+    protocol negotiation HELO/EHLO value.
+  - Initial FIPS 3.0 support.
+* Bugfixes
+  - X.509v3 extensions required by modern versions of OpenSSL
+    are added to generated self-signed test certificates.
+  - Fixed a tiny memory leak in configuration file reload
+    error handling (thx to Richard Könning).
+  - Merged Debian 05-typos.patch (thx to Peter Pentchev).
+  - Merged with minor changes Debian 06-hup-separate.patch
+    (thx to Peter Pentchev).
+  - Merged Debian 07-imap-capabilities.patch (thx to Ansgar).
+  - Merged Debian 08-addrconfig-workaround.patch (thx to Peter
+    Pentchev).
+  - Fixed tests on the WSL2 platform.
+  - NSIS installer updated to version 3.06 to fix a multiuser
+    installation bug on some platforms, including 64-bit XP.
+  - Fixed engine initialization (thx to Petr Strukov).
+  - FIPS TLS feature is reported when a provider or container
+    is available, and not when FIPS control API is available.
+
+### Version 5.57, 2020.10.11, urgency: HIGH
+* Security bugfixes
+  - The "redirect" option was fixed to properly
+    handle "verifyChain = yes" (thx to Rob Hoes).
+  - OpenSSL DLLs updated to version 1.1.1h.
+* New features
+  - New securityLevel configuration file option.
+  - FIPS support for RHEL-based distributions.
+  - Support for modern PostgreSQL clients (thx to Bram Geron).
+  - Windows tooltip texts updated to mention "stunnel".
+  - TLS 1.3 configuration updated for better compatibility.
+* Bugfixes
+  - Fixed a transfer() loop bug.
+  - Fixed memory leaks on configuration reloading errors.
+  - DH/ECDH initialization restored for client sections.
+  - Delay startup with systemd until network is online.
+  - bin\libssp-0.dll removed when uninstalling.
+  - A number of testing framework fixes and improvements.
+
 ### Version 5.56, 2019.11.22, urgency: HIGH
 * New features
   - Various text files converted to Markdown format.

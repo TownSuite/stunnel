@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# by Michal Trojnara 1998-2019
+# by Michal Trojnara 1998-2022
 
 ###############################################################################
 # File lists                                                                  #
@@ -29,7 +29,7 @@ CLEANFILES = stunnel3
 # Red Hat "by design" bug #82369
 stunnel_CPPFLAGS = -I$(SYSROOT)/usr/kerberos/include
 
-# Additional preprocesor definitions
+# Additional preprocessor definitions
 stunnel_CPPFLAGS += -I$(SSLDIR)/include
 stunnel_CPPFLAGS += -DLIBDIR='"$(pkglibdir)"'
 stunnel_CPPFLAGS += -DCONFDIR='"$(sysconfdir)/stunnel"'

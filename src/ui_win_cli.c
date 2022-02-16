@@ -1,6 +1,6 @@
 /*
  *   stunnel       TLS offloading and load-balancing proxy
- *   Copyright (C) 1998-2019 Michal Trojnara <Michal.Trojnara@stunnel.org>
+ *   Copyright (C) 1998-2022 Michal Trojnara <Michal.Trojnara@stunnel.org>
  *
  *   This program is free software; you can redistribute it and/or modify it
  *   under the terms of the GNU General Public License as published by the
@@ -65,8 +65,12 @@ int main(int argc, char *argv[]) {
 #endif
     _tputenv(str_tprintf(TEXT("OPENSSL_ENGINES=%s\\engines"),
         stunnel_exe_path));
+    _tputenv(str_tprintf(TEXT("OPENSSL_MODULES=%s\\ossl-modules"),
+        stunnel_exe_path));
+    _tputenv(str_tprintf(TEXT("OPENSSL_CONF=%s\\config\\openssl.cnf"),
+        stunnel_exe_path));
 
-    if(WSAStartup(MAKEWORD(1, 1), &wsa_state))
+    if(WSAStartup(MAKEWORD(2, 2), &wsa_state))
         return 1;
     resolver_init();
     main_init();
@@ -130,9 +134,23 @@ int ui_passwd_cb(char *buf, int size, int rwflag, void *userdata) {
 }
 
 #ifndef OPENSSL_NO_ENGINE
-UI_METHOD *UI_stunnel() {
-    return UI_OpenSSL();
+
+int (*ui_get_opener()) (UI *) {
+    return UI_method_get_opener(UI_OpenSSL());
 }
+
+int (*ui_get_writer()) (UI *, UI_STRING *) {
+    return UI_method_get_writer(UI_OpenSSL());
+}
+
+int (*ui_get_reader()) (UI *, UI_STRING *) {
+    return UI_method_get_reader(UI_OpenSSL());
+}
+
+int (*ui_get_closer()) (UI *) {
+    return UI_method_get_closer(UI_OpenSSL());
+}
+
 #endif
 
 /* end of ui_win_cli.c */

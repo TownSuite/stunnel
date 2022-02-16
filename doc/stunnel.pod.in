@@ -461,6 +461,8 @@ I<SSL_CONF_cmd(3ssl)> manual page.
 
 Several I<config> lines can be used to specify multiple configuration commands.
 
+Use I<curves> option instead of enabling I<config = Curves:list_curves> to support elliptic curves.
+
 This option requires OpenSSL 1.0.2 or later.
 
 =item B<connect> = [HOST:]PORT
@@ -499,7 +501,7 @@ I<verifyPeer> options.
 
 ECDH curves separated with ':'
 
-Only a single curve name is allowed for OpenSSL older than 1.1.0.
+Only a single curve name is allowed for OpenSSL older than 1.1.1.
 
 To get a list of supported curves use:
 
@@ -553,8 +555,13 @@ debugging level
 Level is a one of the syslog level names or numbers
 emerg (0), alert (1), crit (2), err (3), warning (4), notice (5),
 info (6), or debug (7).  All logs for the specified level and
-all levels numerically less than it will be shown.  Use I<debug = debug> or
-I<debug = 7> for greatest debugging output.  The default is notice (5).
+all levels numerically less than it will be shown.
+The default is notice (5).
+
+While the I<debug = debug> or I<debug = 7> level generates the most verbose
+output, it is only intended to be used by stunnel developers.  Please only use
+this value if you are a developer, or you intend to send your logs to our
+technical support.  Otherwise, the generated logs B<will> be confusing.
 
 =item B<delay> = yes | no
 
@@ -732,6 +739,16 @@ Currently supported protocols:
 Proprietary (undocummented) extension of CIFS protocol implemented in Samba.
 Support for this extension was dropped in Samba 3.0.0.
 
+=item I<capwin>
+
+http://www.capwin.org/ application support
+
+=item I<capwinctrl>
+
+http://www.capwin.org/ application support
+
+This protocol is only supported in client mode.
+
 =item I<connect>
 
 Based on RFC 2817 - I<Upgrading to TLS Within HTTP/1.1>, section 5.2 - I<Requesting a Tunnel with CONNECT>
@@ -741,6 +758,10 @@ This protocol is only supported in client mode.
 =item I<imap>
 
 Based on RFC 2595 - I<Using TLS with IMAP, POP3 and ACAP>
+
+=item I<ldap>
+
+Based on RFC 2830 - I<Lightweight Directory Access Protocol (v3): Extension for Transport Layer Security>
 
 =item I<nntp>
 
@@ -759,7 +780,7 @@ Based on RFC 2449 - I<POP3 Extension Mechanism>
 
 =item I<proxy>
 
-Passing of the original client IP with HAProxy PROXY protocol version 1
+Passing of the original client IP address with HAProxy PROXY protocol version 1
 F<https://www.haproxy.org/download/1.8/doc/proxy-protocol.txt>
 
 =item I<smtp>
@@ -803,16 +824,22 @@ domain for the protocol negotiations
 
 Currently, this option is only supported in the client-side 'connect' protocol.
 
-=item B<protocolHost> = HOST:PORT
+=item B<protocolHeader> = HEADER
 
-destination address for the protocol negotiations
+header for the protocol negotiations
 
-I<protocolHost> specifies the final TLS server to be connected to by the proxy,
-and not the proxy server directly connected by B<stunnel>.
-The proxy server should be specified with the 'connect' option.
+Currently, this option is only supported in the client-side 'connect' protocol.
 
-Currently the protocol destination address only applies to the 'connect'
-protocol.
+=item B<protocolHost> = ADDRESS
+
+host address for the protocol negotiations
+
+For the 'connect' protocol negotiations, I<protocolHost> specifies HOST:PORT of
+the final TLS server to be connected to by the proxy.  The proxy server
+directly connected by B<stunnel> must be specified with the I<connect> option.
+
+For the 'smtp' protocol negotiations, I<protocolHost> controls the client SMTP
+HELO/EHLO value.
 
 =item B<protocolPassword> = PASSWORD
 
@@ -892,6 +919,44 @@ reconnect a connect+exec section after it was disconnected
 
 default: no
 
+=item B<securityLevel> = LEVEL
+
+set the security level
+
+The meaning of each level is described below:
+
+=over 4
+
+=item level 0
+
+Everything is permitted.
+
+=item level 1
+
+The security level corresponds to a minimum of 80 bits of security. Any parameters offering below 80 bits of security are excluded. As a result RSA, DSA and DH keys shorter than 1024 bits and ECC keys shorter than 160 bits are prohibited. All export cipher suites are prohibited since they all offer less than 80 bits of security. SSL version 2 is prohibited. Any cipher suite using MD5 for the MAC is also prohibited.
+
+=item level 2
+
+Security level set to 112 bits of security. As a result RSA, DSA and DH keys shorter than 2048 bits and ECC keys shorter than 224 bits are prohibited. In addition to the level 1 exclusions any cipher suite using RC4 is also prohibited. SSL version 3 is also not allowed. Compression is disabled.
+
+=item level 3
+
+Security level set to 128 bits of security. As a result RSA, DSA and DH keys shorter than 3072 bits and ECC keys shorter than 256 bits are prohibited. In addition to the level 2 exclusions cipher suites not offering forward secrecy are prohibited. TLS versions below 1.1 are not permitted. Session tickets are disabled.
+
+=item level 4
+
+Security level set to 192 bits of security. As a result RSA, DSA and DH keys shorter than 7680 bits and ECC keys shorter than 384 bits are prohibited. Cipher suites using SHA1 for the MAC are prohibited. TLS versions below 1.2 are not permitted.
+
+=item level 5
+
+Security level set to 256 bits of security. As a result RSA, DSA and DH keys shorter than 15360 bits and ECC keys shorter than 512 bits are prohibited.
+
+=item default: 2
+
+=back
+
+The I<securityLevel> option is only available when compiled with B<OpenSSL 1.1.0> and later.
+
 =item B<requireCert> = yes | no
 
 require a client certificate for I<verifyChain> or I<verifyPeer>
@@ -934,6 +999,12 @@ for production use due to the risk of a memory exhaustion DoS attack.
 session cache timeout
 
 This is the number of seconds to keep cached TLS sessions.
+
+=item B<sessionResume> = yes | no
+
+allow or disallow session resumption
+
+default: yes
 
 =item B<sessiond> = HOST:PORT
 
@@ -1065,7 +1136,7 @@ capability, where the server-side caching is not required to maintain per
 session state.
 
 Combining I<ticketKeySecret> and I<ticketMacSecret> options allow to resume a
-negotiated session on other cluster nodes, or to resume resume a negotiated
+negotiated session on other cluster nodes, or to resume a negotiated
 session after server restart.
 
 The key is required to be either 16 or 32 bytes long, which implies exactly 32

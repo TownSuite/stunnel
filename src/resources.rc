@@ -19,7 +19,7 @@ BEGIN
             VALUE "FileDescription",    "stunnel - TLS offloading and load-balancing proxy"
             VALUE "FileVersion",        STUNNEL_VERSION
             VALUE "InternalName",       "stunnel"
-            VALUE "LegalCopyright",     "© by Michal Trojnara, 1998-2019"
+            VALUE "LegalCopyright",     "© by Michal Trojnara, 1998-2022"
             VALUE "OriginalFilename",   "stunnel.exe"
             VALUE "ProductName",        STUNNEL_PRODUCTNAME
             VALUE "ProductVersion",     STUNNEL_VERSION
@@ -44,7 +44,7 @@ BEGIN
         MENUITEM "Reopen &Log File",        IDM_REOPEN_LOG, GRAYED
         MENUITEM "Co&nnections",            IDM_CONNECTIONS
         MENUITEM SEPARATOR
-        MENUITEM "E&xit",                   IDM_EXIT
+        MENUITEM "&Terminate",              IDM_EXIT
         MENUITEM SEPARATOR
         MENUITEM "&Close",                  IDM_CLOSE
     END
@@ -58,9 +58,9 @@ BEGIN
         MENUITEM "&Reload Configuration",   IDM_RELOAD_CONFIG
     END
 #ifdef _WIN32_WCE
-    POPUP "&Save Peer Certs"
+    POPUP "&Save Peer Cert",                GRAYED
 #else
-    POPUP "&Save Peer Certificate"
+    POPUP "&Save Peer Certificate",         GRAYED
 #endif
     BEGIN
         MENUITEM "dummy",                   0, GRAYED
@@ -86,7 +86,7 @@ BEGIN
         MENUITEM "&Edit Configuration",     IDM_EDIT_CONFIG
         MENUITEM "&Reload Configuration",   IDM_RELOAD_CONFIG
         MENUITEM SEPARATOR
-        POPUP "&Save Peer Certificate"
+        POPUP "&Save Peer Certificate",     GRAYED
         BEGIN
             MENUITEM "dummy",               0, GRAYED
         END
@@ -95,7 +95,7 @@ BEGIN
         MENUITEM "&Manual",                 IDM_MANPAGE
         MENUITEM "&About",                  IDM_ABOUT
         MENUITEM SEPARATOR
-        MENUITEM "E&xit",                   IDM_EXIT
+        MENUITEM "&Terminate",              IDM_EXIT
     END
 END
 
@@ -107,7 +107,7 @@ BEGIN
     ICON            IDI_STUNNEL_MAIN, -1,                        6,  6,  20, 20
     LTEXT           "stunnel version", -1,                      30,  4,  49,  8
     LTEXT           STUNNEL_VERSION, -1,                        79,  4,  57,  8
-    LTEXT           "© by Michal Trojnara, 1998-2019", -1,      30, 12, 106,  8
+    LTEXT           "© by Michal Trojnara, 1998-2022", -1,      30, 12, 106,  8
     LTEXT           "All Rights Reserved", -1,                  30, 20, 106,  8
     LTEXT           "Licensed under the GNU GPL version 2", -1,  4, 28, 132,  8
     LTEXT           "with a special exception for OpenSSL", -1,  4, 36, 132,  8

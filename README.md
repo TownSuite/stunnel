@@ -12,19 +12,15 @@
      used  inetd  daemons  like  POP-2,  POP-3  and  IMAP servers
      without any changes in the programs' code.
 
-### Compile instructions
-
-     See INSTALL file.
-
 ### License
 
-     See COPYING file.
+     See [COPYING](COPYING.md) file.
 
 ### Other files you should read
 
-     Changelog      What I did
-     TODO           What I'm going to do
+     [NEWS](NEWS.md) What I did
+     [TODO](TODO.md) What I'm going to do
 
 ### Reporting problems and other contacts
 
-     See FAQ file.
+     See the [FAQ](https://www.stunnel.org/faq.html).

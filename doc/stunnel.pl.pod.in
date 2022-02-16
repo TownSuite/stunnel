@@ -190,8 +190,14 @@ Poziom logowania można określić przy pomocy jednej z nazw lub liczb:
 emerg (0), alert (1), crit (2), err (3), warning (4), notice (5),
 info (6) lub debug (7).
 Zapisywane są komunikaty o poziomie niższym (numerycznie) lub równym podanemu.
-Do uzyskania najwyższego poziomu szczegółowości można użyć opcji
-I<debug = debug> lub I<debug = 7>.  Domyślnym poziomem jest notice (5).
+Domyślnym poziomem jest notice (5).
+
+Jakkolwiek użycie I<debug = debug> lub I<debug = 7> zapewnia najbardziej
+szczegółowe logi, ich zawartość jest użyteczna jedynie dla programistów
+zajmujących się stunnelem.  Użyj tego poziomu logowania jedynie jeśli jesteś
+programistką/programistą stunnela, albo przygotowujesz szczegółowe informacje
+celem przesłania do wsparcia technicznego.  W przeciwnym wypadku próba analizy
+zawartości logów B<będzie> jedynie źródłem dodatkowego zamieszania.
 
 O ile nie wyspecyfikowano podsystemu użyty będzie domyślny: daemon.
 Podsystemy nie są wspierane przez platformę Win32.
@@ -463,11 +469,14 @@ komenda konfiguracyjna B<OpenSSL>
 
 Komenda konfiguracyjna B<OpenSSL> zostaje wykonana z podanym parametrem.
 Pozwala to na wydawanie komend konfiguracyjnych B<OpenSSL> z pliku
-konfiguracyjnego stunnela.  Dostępne komendy opisane są w manualu
+konfiguracyjnego stunnela.  Dostępne komendy opisane są w podręczniku
 I<SSL_CONF_cmd(3ssl)>.
 
 Możliwe jest wyspecyfikowanie wielu opcji B<OpenSSL> przez wielokrotne użycie
 komendy B<config>.
+
+Zamiast wyłączać I<config = Curves:list_curves>
+użyj opcji I<curves> w celu ustawienia krzywych eliptycznych.
 
 Opcja ta wymaga biblioteki OpenSSL w wersji 1.0.2 lub nowszej.
 
@@ -507,7 +516,7 @@ przez opcje I<verifyChain> i I<verifyPeer>.
 
 krzywe ECDH odddzielone ':'
 
-Wersje OpenSSL starsze niż 1.1.0 pozwalają na użycie tylko jednej krzywej.
+Wersje OpenSSL starsze niż 1.1.1 pozwalają na użycie tylko jednej krzywej.
 
 Listę dostępnych krzywych można uzyskać poleceniem:
 
@@ -745,7 +754,17 @@ Aktualnie wspierane protokoły:
 =item I<cifs>
 
 Nieudokumentowane rozszerzenie protokołu CIFS wspierane przez serwer Samba.
-Wsparcie dla tego rozrzeczenia zostało zarzucone w wersji 3.0.0 serwera Samba.
+Wsparcie dla tego rozszerzenia zostało zarzucone w wersji 3.0.0 serwera Samba.
+
+=item I<capwin>
+
+Wsparcie dla aplikacji http://www.capwin.org/
+
+=item I<capwinctrl>
+
+Wsparcie dla aplikacji http://www.capwin.org/
+
+Ten protokół jest wspierany wyłącznie w trybie klienckim.
 
 =item I<connect>
 
@@ -756,6 +775,10 @@ Ten protokół jest wspierany wyłącznie w trybie klienckim.
 =item I<imap>
 
 Negocjacja RFC 2595 - I<Using TLS with IMAP, POP3 and ACAP>
+
+=item I<ldap>
+
+Negocjacja RFC 2830 - I<Lightweight Directory Access Protocol (v3): Extension for Transport Layer Security>
 
 =item I<nntp>
 
@@ -814,18 +837,24 @@ Domyślnym rodzajem uwierzytelnienia protokołu 'smtp' jest 'plain'.
 
 domena do negocjacji protokołu
 
-W obecnej wersji wybrana domena ma zastosowanie wyłącznie w protokole 'connect'.
+W obecnej wersji opcja ma zastosowanie wyłącznie w protokole 'connect'.
 
-=item B<protocolHost> = HOST:PORT
+=item B<protocolHeader> = NAGŁÓWEK
 
-adres docelowy do negocjacji protokołu
+nagłówek do negocjacji protokołu
 
-I<protocolHost> określa docelowy serwer TLS, do którego połączyć ma się proxy.
-Nie jest to adres serwera proxy, do którego połączenie zestawia B<stunnel>.
-Adres serwera proxy powinien być określony przy pomocy opcji 'connect'.
+W obecnej wersji opcja ma zastosowanie wyłącznie w protokole 'connect'.
 
-W obecnej wersji adres docelowy protokołu ma zastosowanie wyłącznie w protokole
-'connect'.
+=item B<protocolHost> = ADRES
+
+adres hosta do negocjacji protokołu
+
+Dla protokołu 'connect', I<protocolHost> określa docelowy serwer TLS, do
+którego połączyć ma się proxy.  Adres serwera proxy, do którego łączy się
+B<stunnel>, musi być określony przy pomocy opcji I<connect>.
+
+Dla protokołu 'smtp', I<protocolHost> określa wartość HELO/EHLO wysyłanego
+przy negocjacji klienta.
 
 =item B<protocolPassword> = HASŁO
 
@@ -864,7 +893,7 @@ Należy ograniczyć dostęp do czytania lub pisania do tego pliku.
 
 =item B<pty> = yes | no (tylko Unix)
 
-alokuj pseudoterminal dla programu uruchamianego w opcji 'exec'
+alokuj pseudo-terminal dla programu uruchamianego w opcji 'exec'
 
 =item B<redirect> = [HOST:]PORT
 
@@ -884,7 +913,7 @@ wygenerowanie obciążenia procesora:
 
 http://vincent.bernat.im/en/blog/2011-ssl-dos-mitigation.html
 
-Warto zauważyć, że zablokowanie renegocjacji TLS nie zebezpiecza w pełni
+Warto zauważyć, że zablokowanie renegocjacji TLS nie zabezpiecza w pełni
 przed opisanym problemem.
 
 domyślnie: yes (o ile wspierane przez B<OpenSSL>)
@@ -902,6 +931,44 @@ domyślnie: yes
 połącz ponownie sekcję connect+exec po rozłączeniu
 
 domyślnie: no
+
+=item B<securityLevel> = POZIOM
+
+ustaw poziom bezpieczeństwa
+
+Znaczenie każdego poziomu opisano poniżej:
+
+=over 4
+
+=item poziom 0
+
+Wszystko jest dozwolone.
+
+=item poziom 1
+
+Poziom bezpieczeństwa zapewniający minimum 80 bitów bezpieczeństwa. Żadne parametry kryptograficzne oferujące poziom bezpieczeństwa poniżej 80 bitów nie mogą zostać użyte. W związku z tym RSA, DSA oraz klucze DH krótsze niż 1024 bity, a także klucze ECC krótsze niż 160 bitów i wszystkie eksportowe zestawy szyfrów są niedozwolone. Użycie SSLv2 jest zabronione. Wszelkie listy parametrów kryptograficznych używające MD5 do MAC są zabronione.
+
+=item poziom 2
+
+Poziom bezpieczeństwa zapewniający 112 bitów bezpieczeństwa. W związku z tym RSA, DSA oraz klucze DH krótsze niż 2048 bitów, a także klucze ECC krótsze niż 224 bity są niedozwolone. Oprócz wyłączeń z poziomu 1 zabronione jest także korzystanie z zestawów szyfrów używających RC4. Użycie SSLv3 jest zabronione. Kompresja jest wyłączona.
+
+=item poziom 3
+
+Poziom bezpieczeństwa zapewniający 128 bitów bezpieczeństwa. W związku z tym RSA, DSA oraz klucze DH krótsze niż 3072 bity, a także klucze ECC krótsze niż 256 bitów są niedozwolone. Oprócz wyłączeń z poziomu 2  zabronione jest także korzystanie z zestawów szyfrów nie zapewniających utajniania z wyprzedzeniem (forward secrecy).  Wersje TLS starsze niż 1.1 są zabronione. Bilety sesji są wyłączone.
+
+=item poziom 4
+
+Poziom bezpieczeństwa zapewniający 192 bity bezpieczeństwa. W związku z tym RSA, DSA oraz klucze DH krótsze niż 7680 bitów, a także klucze ECC krótsze niż 384 bity są niedozwolone. Listy parametrów kryptograficznych używających SHA1 do MAC są zabronione. Wersje TLS starsze niż 1.2 są zabronione.
+
+=item poziom 5
+
+Poziom bezpieczeństwa zapewniający 256 bitów bezpieczeństwa. W związku z tym RSA, DSA oraz klucze DH krótsze niż 15360 bitów, a także klucze ECC krótsze niż 512 bitów są niedozwolone.
+
+=item domyślnie: 2
+
+=back
+
+Opcja I<securityLevel> jest dostępna począwszy od B<OpenSSL 1.1.0>.
 
 =item B<requireCert> = yes | no
 
@@ -949,9 +1016,15 @@ przeterminowanie pamięci podręcznej sesji TLS
 Parametr określa czas w sekundach, po którym sesja TLS zostanie usunięta z
 pamięci podręcznej.
 
+=item B<sessionResume> = yes | no
+
+zezwalaj lub nie zezwalaj na wznawianie sesji
+
+domyślnie: yes
+
 =item B<sessiond> = HOST:PORT
 
-adres sessiond - servera cache sesji TLS
+adres sessiond - serwera cache sesji TLS
 
 =item B<sni> = NAZWA_USŁUGI:WZORZEC_NAZWY_SERWERA (tryb serwera)
 
@@ -961,8 +1034,8 @@ Name Indication (RFC 3546).
 I<NAZWA_USŁUGI> wskazuje usługę nadrzędną, która odbiera połączenia od klientów
 przy pomocy opcji I<accept>.  I<WZORZEC_NAZWY_SERWERA> wskazuje nazwę serwera
 wirtualnego.  Wzorzec może zaczynać się znakiem '*', np. '*.example.com".  Z
-pojedyńczą usługą nadrzędną powiązane jest zwykle wiele usług podrzędnych.
-Opcja I<sni> może być rownież użyta wielokrotnie w ramach jednej usługi
+pojedynczą usługą nadrzędną powiązane jest zwykle wiele usług podrzędnych.
+Opcja I<sni> może być również użyta wielokrotnie w ramach jednej usługi
 podrzędnej.
 
 Zarówno usługa nadrzędna jak i podrzędna nie może być skonfigurowana w trybie
@@ -1134,7 +1207,7 @@ Wspierane wartości:
 
 =item B<none>
 
-Zablokuj wsparcie dla przezroczystago proxy.  Jest to wartość domyślna.
+Zablokuj wsparcie dla przezroczystego proxy.  Jest to wartość domyślna.
 
 =item B<source>
 
@@ -1185,7 +1258,7 @@ platformie Tru64 lub LD_PRELOAD na innych platformach.
 
 Oryginalny adres docelowy jest używany zamiast opcji I<connect>.
 
-Przykładowana konfiguracja przezroczystego adresu docelowego:
+Przykładowa konfiguracja przezroczystego adresu docelowego:
 
     [transparent]
     client = yes
@@ -1215,7 +1288,7 @@ Użyj przezroczystego proxy zarówno dla adresu źródłowego jak i docelowego.
 
 =back
 
-Dla zapewnienia kompatybilności z wcześniejszymim wersjami wspierane są dwie
+Dla zapewnienia kompatybilności z wcześniejszymi wersjami wspierane są dwie
 dodatkowe opcje:
 
 =over 4
@@ -1606,7 +1679,7 @@ B<stunnel>.
 
 Począwszy od wersji 4.40 B<stunnel> zawiera w kodzie programu 2048-bitowe
 parametry DH.  Od wersji 5.18 te początkowe wartości parametrów DH są
-wymieniane na autogenerowane parametry tymczasowe.
+wymieniane na automatycznie generowane parametry tymczasowe.
 Wygenerowanie parametrów DH może zająć nawet wiele minut.
 
 Alternatywnie parametry DH można umieścić w pliku razem z certyfikatem,

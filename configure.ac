@@ -1,6 +1,6 @@
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT([stunnel],[5.56])
+AC_INIT([stunnel],[5.62])
 AC_MSG_NOTICE([**************************************** initialization])
 AC_CONFIG_AUX_DIR(auto)
 AC_CONFIG_MACRO_DIR([m4])
@@ -28,12 +28,21 @@ case "$host_os" in
     ;;
 esac
 
-AC_PROG_CC
+AC_PROG_CC([gcc clang cl cc])
 AM_PROG_CC_C_O
 AC_PROG_INSTALL
 AC_PROG_MAKE_SET
 # silent build by default
 ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
+
+AC_MSG_NOTICE([**************************************** bash completion])
+AC_ARG_WITH([bashcompdir],
+    AS_HELP_STRING([--with-bashcompdir=DIR], [directory for bash completions]), ,
+    [PKG_CHECK_VAR([with_bashcompdir], [bash-completion], [completionsdir], ,
+        [with_bashcompdir="${datarootdir}/bash-completion/completions"])])
+AC_MSG_CHECKING([for bashcompdir])
+AC_MSG_RESULT([$with_bashcompdir])
+AC_SUBST([bashcompdir], [$with_bashcompdir])
 
 AC_MSG_NOTICE([**************************************** thread model])
 # thread detection should be done first, as it may change the CC variable
@@ -299,7 +308,7 @@ AC_ARG_ENABLE(fips,
 [  --disable-fips          disable OpenSSL FIPS support],
     [
         case "$enableval" in
-            yes) AC_MSG_RESULT([no])
+            yes) AC_MSG_RESULT([yes])
                  use_fips="yes"
                  AC_DEFINE([USE_FIPS], [1],
                     [Define to 1 to enable OpenSSL FIPS support])
@@ -458,13 +467,14 @@ AC_DEFINE_UNQUOTED([SSLDIR], ["$SSLDIR"], [TLS directory])
 valid_CPPFLAGS="$CPPFLAGS"; CPPFLAGS="$CPPFLAGS -I$SSLDIR/include"
 valid_LIBS="$LIBS"; LIBS="$LIBS -L$SSLDIR/lib64 -L$SSLDIR/lib -lssl -lcrypto"
 
+AC_CHECK_FUNCS(FIPS_mode_set OSSL_PROVIDER_available)
 if test "x$use_fips" = "xauto"; then
-    AC_CHECK_FUNCS(FIPS_mode_set, [
+    if test "x$ac_cv_func_FIPS_mode_set" = "xyes" -o "x$ac_cv_func_OSSL_PROVIDER_available" = "xyes"; then
         AC_DEFINE([USE_FIPS], [1], [Define to 1 to enable OpenSSL FIPS support])
         AC_MSG_NOTICE([FIPS support enabled])
-    ], [
+    else
         AC_MSG_NOTICE([FIPS support not found])
-    ])
+    fi
 fi
 
 AC_MSG_CHECKING([whether DH parameters need to be updated])
@@ -480,6 +490,9 @@ if test -f src/stunnel.c && ! grep -q " built for $PACKAGE_STRING " src/dhparam.
         echo '#endif /* OPENSSL_NO_DH */'
         echo "/* built for $PACKAGE_STRING */"
     ) > src/dhparam.c
+    # also update trusted CA certificates
+    curl 'https://ccadb-public.secure.force.com/mozilla/IncludedRootsPEMTxt?TrustBitsInclude=Websites' |
+        sed -e 's/\r//' -e 's/ $//' >tools/ca-certs.pem
 else
     AC_MSG_RESULT([no])
 fi

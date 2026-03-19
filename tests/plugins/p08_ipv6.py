@@ -3,7 +3,7 @@
 import logging
 import os
 import pathlib
-from plugin_collection import Plugin
+from plugin_collection import Plugin, ERR_CONN_RESET
 from maketest import (
     Config,
     StunnelAcceptConnect
@@ -25,6 +25,9 @@ class IPv6Test(StunnelTest):
     def __init__(self, cfg: Config, logger: logging.Logger):
         super().__init__(cfg, logger)
         self.params.description = '081. Test IPv6 support'
+        self.events.skip = [
+            r"Binding service \[.*\] failed"
+        ]
         self.events.failure = [
             "peer did not return a certificate",
             "bad certificate",
@@ -32,7 +35,7 @@ class IPv6Test(StunnelTest):
             "unsupported protocol",
             "TLS accepted: previous session reused",
             "Redirecting connection",
-            "Connection reset by peer",
+            ERR_CONN_RESET,
             "Connection lost",
             "Client received unexpected message",
             "Server received unexpected message",
@@ -46,7 +49,6 @@ class IPv6Test(StunnelTest):
     ) -> (pathlib.Path, pathlib.Path):
         """Create a configuration file for a stunnel client."""
         contents = f"""
-    pid = {cfg.tempd}/stunnel_{service}.pid
     foreground = yes
     debug = debug
     syslog = no
@@ -66,7 +68,6 @@ class IPv6Test(StunnelTest):
     ) -> pathlib.Path:
         """Create a configuration file for a stunnel server."""
         contents = f"""
-    pid = {cfg.tempd}/stunnel_{service}.pid
     foreground = yes
     debug = debug
     syslog = no

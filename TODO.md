@@ -1,29 +1,35 @@
 # stunnel TODO
 
 
+### Updated defaults planned for stunnel 6.xx
+More secure defaults planned for the next major version.
+
+* OCSPaia = yes
+* verifyPeer = yes (on the client)
+
 ### High priority features
 These features will likely be supported some day.
 A sponsor could allocate my time to get them faster.
 
+* DTLS support (transport = UDP).
 * Add client certificate autoselection based on the list of accepted issuers:
   SSL_CTX_set_client_cert_cb(), SSL_get_client_CA_list().
-* OCSP stapling (tlsext_status).
 * Indirect CRL support (RFC 3280, section 5).
 * Add an Apparmor profile.
-* Log rotation on Windows.
+* Log rotation on Windows (-reopen was already implemented in stunnel 5.15).
 * Configuration file option to limit the number of concurrent connections.
 * Command-line server control interface on Unix.
 * An Android GUI.
 * MSI installer for Windows.
 * Add 'leastconn' failover strategy to order defined 'connect' targets
   by the number of active connections.
-* Optional line-buffering of the log file.
+* MariaDB (formerly MySQL) protocol negotiation:
+  [MariaDB Handshake Protocol](https://mariadb.com/kb/en/connection/)
 
 ### Low priority features
 These features will unlikely ever be supported.
 
 * Database and/or directory interface for retrieving PSK secrets.
-* Support static FIPS-enabled builds.
 * Service-level logging destination.
 * Logging to NT EventLog on Windows.
 * Internationalization of logged messages (i18n).

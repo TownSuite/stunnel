@@ -1,6 +1,6 @@
 /*
  *   stunnel       TLS offloading and load-balancing proxy
- *   Copyright (C) 1998-2022 Michal Trojnara <Michal.Trojnara@stunnel.org>
+ *   Copyright (C) 1998-2025 Michal Trojnara <Michal.Trojnara@stunnel.org>
  *
  *   This program is free software; you can redistribute it and/or modify it
  *   under the terms of the GNU General Public License as published by the
@@ -105,7 +105,24 @@ int listen_fds_start; /* base for systemd-provided file descriptors */
 
 /**************************************** startup */
 
-void main_init() { /* one-time initialization */
+/* this has to be the first function called from ui_*.c */
+int stunnel_init(void) { /* basic initialization */
+#ifdef USE_WIN32
+    static struct WSAData wsa_state;
+#endif
+
+    tls_init(); /* initialize thread-local storage */
+    str_init(); /* initialize memory allocator */
+    crypto_init(); /* initialize libcrypto */
+#ifdef USE_WIN32
+    if(WSAStartup(MAKEWORD(2, 2), &wsa_state))
+        return 1; /* error */
+#endif
+    resolver_init();
+    return 0;
+}
+
+void main_init(void) { /* one-time initialization */
 #ifdef USE_SYSTEMD
     int i;
 
@@ -238,7 +255,7 @@ int drop_privileges(int critical) {
     return 0;
 }
 
-void main_cleanup() {
+void main_cleanup(void) {
     terminate_threads();
     unbind_ports();
     s_poll_free(fds);
@@ -256,7 +273,7 @@ void main_cleanup() {
 #pragma GCC diagnostic ignored "-Wunused-result"
 #endif /* __GNUC__>=4.6 */
 #endif /* __GNUC__ */
-NOEXPORT void terminate_threads() {
+NOEXPORT void terminate_threads(void) {
 #ifdef USE_TERMINATE_PIPE
     CLI *c;
     unsigned i, threads;
@@ -266,15 +283,19 @@ NOEXPORT void terminate_threads() {
     threads=0;
     for(c=thread_head; c; c=c->thread_next) /* count client threads */
         threads++;
-    thread_list=str_alloc((threads+1)*sizeof(THREAD_ID));
+    thread_list=str_alloc((threads+2)*sizeof(THREAD_ID));
     i=0;
     for(c=thread_head; c; c=c->thread_next) { /* copy client threads */
         thread_list[i++]=c->thread_id;
         s_log(LOG_DEBUG, "Terminating a thread for [%s]", c->opt->servname);
     }
-    if(cron_thread_id) { /* append cron_thread_id if used */
-        thread_list[threads++]=cron_thread_id;
-        s_log(LOG_DEBUG, "Terminating the cron thread");
+    if(per_second_thread_id) { /* append per_second_thread_id if used */
+        thread_list[threads++]=per_second_thread_id;
+        s_log(LOG_DEBUG, "Terminating the per-second thread");
+    }
+    if(per_day_thread_id) { /* append per_day_thread_id if used */
+        thread_list[threads++]=per_day_thread_id;
+        s_log(LOG_DEBUG, "Terminating the per-day thread");
     }
     CRYPTO_THREAD_unlock(stunnel_locks[LOCK_THREAD_LIST]);
 
@@ -361,6 +382,7 @@ void daemon_loop(void) {
         s_log(LOG_CRIT, "Failed to start exec+connect services");
         exit(1);
     }
+    s_log(LOG_INFO, "Accepting new connections");
     while(1) {
         int temporary_lack_of_resources=0;
         int num=s_poll_wait(fds, -1, -1);
@@ -445,7 +467,6 @@ NOEXPORT int accept_connection(SERVICE_OPTIONS *opt, unsigned i) {
 #endif
     if(create_client(fd, s, alloc_client_session(opt, s, s))) {
         s_log(LOG_ERR, "Connection rejected: create_client failed");
-        closesocket(s);
 #ifndef USE_FORK
         service_free(opt);
 #endif
@@ -501,7 +522,7 @@ NOEXPORT void unbind_ports(void) {
             /* FIXME: this is just a crude workaround   */
             /*        is it better to kill the service? */
             /* FIXME: this won't work with FORK threads */
-            opt->option.retry=0;
+            opt->retry=-1; /* disable */
         }
 
         s_log(LOG_DEBUG, "Service [%s] closed", opt->servname);
@@ -588,7 +609,7 @@ NOEXPORT int bind_ports(void) {
             s_log(LOG_DEBUG, "Skipped exec+connect service [%s]", opt->servname);
 #ifndef OPENSSL_NO_TLSEXT
         } else if(!opt->option.client && opt->sni) {
-            s_log(LOG_DEBUG, "Skipped SNI slave service [%s]", opt->servname);
+            s_log(LOG_DEBUG, "Skipped SNI secondary service [%s]", opt->servname);
 #endif
         } else { /* each service must define two endpoints */
             s_log(LOG_ERR, "Invalid service [%s]", opt->servname);
@@ -811,7 +832,7 @@ NOEXPORT int signal_pipe_dispatch(void) {
         pid_status_nohang("Child process"); /* 'exec' process */
 #endif /* defined USE_FORK */
         return 0;
-#endif /* !defind USE_WIN32 */
+#endif /* !defined USE_WIN32 */
     case SIGNAL_TERMINATE:
         s_log(LOG_DEBUG, "Processing SIGNAL_TERMINATE");
         s_log(LOG_NOTICE, "Terminated");
@@ -838,7 +859,7 @@ NOEXPORT int signal_pipe_dispatch(void) {
     }
 }
 
-NOEXPORT void reload_config() {
+NOEXPORT void reload_config(void) {
     static int delay=10; /* default of 10ms */
 #ifdef HAVE_CHROOT
     struct stat sb;
@@ -888,7 +909,7 @@ NOEXPORT void reload_config() {
 #pragma GCC diagnostic ignored "-Wformat"
 #pragma GCC diagnostic ignored "-Wformat-extra-args"
 #endif /* __GNUC__ */
-NOEXPORT int process_connections() {
+NOEXPORT int process_connections(void) {
 #ifndef USE_FORK
     CLI *c;
     int n=0;
@@ -1085,12 +1106,14 @@ void stunnel_info(int level) {
     features=str_cat(features, "ENGINE");
     tls_feature_found=1;
 #endif /* !defined(OPENSSL_NO_ENGINE) */
+#ifdef USE_FIPS
     if(fips_available()) {
         if(tls_feature_found)
             features=str_cat(features, ",");
         features=str_cat(features, "FIPS");
         tls_feature_found=1;
     }
+#endif /* USE_FIPS */
 #ifndef OPENSSL_NO_OCSP
     if(tls_feature_found)
         features=str_cat(features, ",");

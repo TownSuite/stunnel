@@ -1,6 +1,6 @@
 /*
  *   stunnel       TLS offloading and load-balancing proxy
- *   Copyright (C) 1998-2022 Michal Trojnara <Michal.Trojnara@stunnel.org>
+ *   Copyright (C) 1998-2025 Michal Trojnara <Michal.Trojnara@stunnel.org>
  *
  *   This program is free software; you can redistribute it and/or modify it
  *   under the terms of the GNU General Public License as published by the
@@ -38,41 +38,8 @@
 #include "prototypes.h"
 
 int main(int argc, char *argv[]) {
-    static struct WSAData wsa_state;
-    TCHAR *c, stunnel_exe_path[MAX_PATH];
-
-    tls_init(); /* initialize thread-local storage */
-
-    /* set current working directory and engine path */
-    GetModuleFileName(0, stunnel_exe_path, MAX_PATH);
-    c=_tcsrchr(stunnel_exe_path, TEXT('\\')); /* last backslash */
-    if(c) { /* found */
-        *c=TEXT('\0'); /* truncate the program name */
-        c=_tcsrchr(stunnel_exe_path, TEXT('\\')); /* previous backslash */
-        if(c && !_tcscmp(c+1, TEXT("bin")))
-            *c=TEXT('\0'); /* truncate "bin" */
-    }
-#ifndef _WIN32_WCE
-    if(!SetCurrentDirectory(stunnel_exe_path)) {
-        /* log to stderr, as s_log() is not initialized */
-        _ftprintf(stderr, TEXT("Cannot set directory to %s"),
-            stunnel_exe_path);
+    if(stunnel_init())
         return 1;
-    }
-    /* try to enter the "config" subdirectory, ignore the result */
-    SetCurrentDirectory(TEXT("config"));
-#endif
-    _tputenv(str_tprintf(TEXT("OPENSSL_ENGINES=%s\\engines"),
-        stunnel_exe_path));
-    _tputenv(str_tprintf(TEXT("OPENSSL_MODULES=%s\\ossl-modules"),
-        stunnel_exe_path));
-    _tputenv(str_tprintf(TEXT("OPENSSL_CONF=%s\\config\\openssl.cnf"),
-        stunnel_exe_path));
-    crypto_init(tstr2str(stunnel_exe_path)); /* initialize libcrypto */
-
-    if(WSAStartup(MAKEWORD(2, 2), &wsa_state))
-        return 1;
-    resolver_init();
     main_init();
     if(!main_configure(argc>1 ? argv[1] : NULL, argc>2 ? argv[2] : NULL))
         daemon_loop();
@@ -121,8 +88,8 @@ void ui_new_log(const char *line) {
     RETAILMSG(TRUE, (TEXT("%s\r\n"), tstr));
 #else
     /* use UTF-16 or native codepage rather than UTF-8 */
-    _ftprintf(stderr, TEXT("%s\r\n"), tstr);
-    fflush(stderr);
+    _putts(tstr);
+    fflush(stdout);
 #endif
     str_free(tstr);
 }
@@ -133,24 +100,24 @@ int ui_passwd_cb(char *buf, int size, int rwflag, void *userdata) {
     return PEM_def_callback(buf, size, rwflag, userdata);
 }
 
-#ifndef OPENSSL_NO_ENGINE
+#if !defined(OPENSSL_NO_ENGINE) || OPENSSL_VERSION_NUMBER>=0x10101000L
 
-int (*ui_get_opener()) (UI *) {
+int (*ui_get_opener(void)) (UI *) {
     return UI_method_get_opener(UI_OpenSSL());
 }
 
-int (*ui_get_writer()) (UI *, UI_STRING *) {
+int (*ui_get_writer(void)) (UI *, UI_STRING *) {
     return UI_method_get_writer(UI_OpenSSL());
 }
 
-int (*ui_get_reader()) (UI *, UI_STRING *) {
+int (*ui_get_reader(void)) (UI *, UI_STRING *) {
     return UI_method_get_reader(UI_OpenSSL());
 }
 
-int (*ui_get_closer()) (UI *) {
+int (*ui_get_closer(void)) (UI *) {
     return UI_method_get_closer(UI_OpenSSL());
 }
 
-#endif
+#endif /* !defined(OPENSSL_NO_ENGINE) || OPENSSL_VERSION_NUMBER>=0x10101000L */
 
 /* end of ui_win_cli.c */

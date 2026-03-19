@@ -1,6 +1,6 @@
 /*
  *   stunnel       TLS offloading and load-balancing proxy
- *   Copyright (C) 1998-2022 Michal Trojnara <Michal.Trojnara@stunnel.org>
+ *   Copyright (C) 1998-2025 Michal Trojnara <Michal.Trojnara@stunnel.org>
  *
  *   This program is free software; you can redistribute it and/or modify it
  *   under the terms of the GNU General Public License as published by the
@@ -47,7 +47,11 @@
 #define LIBWRAP_CLIENTS 5
 
 /* CPU stack size */
+#if defined(__ILP32__) && !defined(__NetBSD__)
 #define DEFAULT_STACK_SIZE 65536
+#else
+#define DEFAULT_STACK_SIZE 131072
+#endif
 /* #define DEBUG_STACK_SIZE */
 
 /* I/O buffer size: 18432 (0x4800) is the maximum size of TLS record payload */
@@ -244,9 +248,15 @@ typedef int                 ssize_t;
 #include <windows.h>
 #include <windowsx.h>
 
+#include <malloc.h>      /* _alloca */
+
 #include <process.h>     /* _beginthread */
 #include <shlobj.h>      /* SHGetFolderPath */
 #include <tchar.h>
+
+#ifndef alloca
+#define alloca _alloca
+#endif
 
 #include "resources.h"
 
@@ -480,6 +490,7 @@ extern char *sys_errlist[];
 #include <openssl/ui.h>
 #include <openssl/err.h>
 #include <openssl/crypto.h> /* for CRYPTO_* and SSLeay_version */
+#include <openssl/x509v3.h>
 #include <openssl/rand.h>
 #include <openssl/bn.h>
 #include <openssl/pkcs12.h>
@@ -491,7 +502,7 @@ extern char *sys_errlist[];
 #include <openssl/dh.h>
 #if OPENSSL_VERSION_NUMBER<0x10100000L
 int DH_set0_pqg(DH *dh, BIGNUM *p, BIGNUM *q, BIGNUM *g);
-#endif /* OpenSSL older than 1.1.0 */
+#endif /* OPENSSL_VERSION_NUMBER<0x10100000L */
 #endif /* !defined(OPENSSL_NO_DH) */
 #ifndef OPENSSL_NO_ENGINE
 #include <openssl/engine.h>
@@ -503,8 +514,13 @@ int DH_set0_pqg(DH *dh, BIGNUM *p, BIGNUM *q, BIGNUM *g);
 /* not defined in public headers before OpenSSL 0.9.8 */
 STACK_OF(SSL_COMP) *SSL_COMP_get_compression_methods(void);
 #endif /* !defined(OPENSSL_NO_COMP) */
+#if OPENSSL_VERSION_NUMBER>=0x10101000L
+#include <openssl/store.h>
+#include <openssl/storeerr.h>
+#endif /* OPENSSL_VERSION_NUMBER>=0x10101000L */
 #if OPENSSL_VERSION_NUMBER>=0x30000000L
 #include <openssl/provider.h>
+#include <openssl/proverr.h>
 #endif /* OPENSSL_VERSION_NUMBER>=0x30000000L */
 
 #ifndef OPENSSL_VERSION
@@ -539,6 +555,14 @@ STACK_OF(SSL_COMP) *SSL_COMP_get_compression_methods(void);
 #endif
 
 #define is_prefix(a, b) (strncasecmp((a), (b), strlen(b))==0)
+
+#ifndef va_copy
+#ifdef __va_copy
+#define va_copy(dst, src) __va_copy((dst), (src))
+#else /* __va_copy */
+#define va_copy(dst, src) memcpy(&(dst), &(src), sizeof(va_list))
+#endif /* __va_copy */
+#endif /* va_copy */
 
 #endif /* defined COMMON_H */
 

@@ -3,7 +3,7 @@
 import logging
 import os
 import pathlib
-from plugin_collection import Plugin
+from plugin_collection import Plugin, ERR_CONN_RESET
 from maketest import (
     Config,
     StunnelAcceptConnect
@@ -27,9 +27,10 @@ class FIPSTest(StunnelTest):
         super().__init__(cfg, logger)
         self.params.description = '101. Test FIPS mode'
         self.events.skip = [
-            "FIPS provider not available",
+            "FIPS.*not available",
             "fips mode not supported",
-            r"FIPS PROVIDER.*could not load the shared library"
+            r"FIPS PROVIDER.*could not load the shared library",
+            r"FIPS PROVIDER.*missing config data"
         ]
         self.events.failure = [
             "peer did not return a certificate",
@@ -38,11 +39,12 @@ class FIPSTest(StunnelTest):
             "unsupported protocol",
             "TLS accepted: previous session reused",
             "Redirecting connection",
-            "Connection reset by peer",
+            ERR_CONN_RESET,
             "Connection lost",
             "Client received unexpected message",
             "Server received unexpected message",
             "Something went wrong",
+            "Invalid groups list in 'curves'",
             "INTERNAL ERROR"
         ]
 
@@ -52,7 +54,6 @@ class FIPSTest(StunnelTest):
     ) -> (pathlib.Path, pathlib.Path):
         """Create a configuration file for a stunnel client."""
         contents = f"""
-    pid = {cfg.tempd}/stunnel_{service}.pid
     foreground = yes
     debug = debug
     syslog = no
@@ -74,7 +75,6 @@ class FIPSTest(StunnelTest):
     ) -> pathlib.Path:
         """Create a configuration file for a stunnel server."""
         contents = f"""
-    pid = {cfg.tempd}/stunnel_{service}.pid
     foreground = yes
     debug = debug
     syslog = no

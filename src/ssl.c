@@ -1,6 +1,6 @@
 /*
  *   stunnel       TLS offloading and load-balancing proxy
- *   Copyright (C) 1998-2022 Michal Trojnara <Michal.Trojnara@stunnel.org>
+ *   Copyright (C) 1998-2025 Michal Trojnara <Michal.Trojnara@stunnel.org>
  *
  *   This program is free software; you can redistribute it and/or modify it
  *   under the terms of the GNU General Public License as published by the
@@ -38,8 +38,13 @@
 #include "prototypes.h"
 
     /* global OpenSSL initialization: compression, engine, entropy */
+#if OPENSSL_VERSION_NUMBER>=0x10100000L
 NOEXPORT void cb_new_auth(void *parent, void *ptr, CRYPTO_EX_DATA *ad,
         int idx, long argl, void *argp);
+#else /* OPENSSL_VERSION_NUMBER>=0x10100000L */
+NOEXPORT int cb_new_auth(void *parent, void *ptr, CRYPTO_EX_DATA *ad,
+        int idx, long argl, void *argp);
+#endif /* OPENSSL_VERSION_NUMBER>=0x10100000L */
 #if OPENSSL_VERSION_NUMBER>=0x30000000L
 NOEXPORT int cb_dup_addr(CRYPTO_EX_DATA *to, const CRYPTO_EX_DATA *from,
     void **from_d, int idx, long argl, void *argp);
@@ -54,7 +59,8 @@ NOEXPORT void cb_free_addr(void *parent, void *ptr, CRYPTO_EX_DATA *ad,
     int idx, long argl, void *argp);
 #ifndef OPENSSL_NO_COMP
 NOEXPORT void compression_init(void);
-NOEXPORT int compression_configure(GLOBAL_OPTIONS *);
+NOEXPORT int compression_set(GLOBAL_OPTIONS *);
+NOEXPORT void compression_list(void);
 #endif
 NOEXPORT int prng_init(GLOBAL_OPTIONS *);
 NOEXPORT int add_rand_file(GLOBAL_OPTIONS *, const char *);
@@ -67,7 +73,8 @@ NOEXPORT STACK_OF(SSL_COMP) *comp_methods[STUNNEL_COMPS];
 #endif
 
 #ifdef USE_FIPS
-int fips_default() {
+
+int fips_default(void) {
     static int cache=-1;
 
     if(cache == -1) {
@@ -79,12 +86,10 @@ int fips_default() {
     }
     return cache;
 }
-#endif /* USE_FIPS */
 
-int fips_available() { /* either FIPS provider or container is available */
-#ifdef USE_FIPS
+int fips_available(void) { /* either FIPS provider or container is available */
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-    static OSSL_PROVIDER *fips=NULL;
+    static OSSL_PROVIDER *fips=NULL; /* cache the success */
 
     if(!fips)
         fips=OSSL_PROVIDER_try_load(NULL, "fips", 1);
@@ -95,58 +100,106 @@ int fips_available() { /* either FIPS provider or container is available */
     return strstr(OpenSSL_version(OPENSSL_VERSION), "-fips") != NULL ||
         strstr(OpenSSL_version(OPENSSL_VERSION), "FIPS") != NULL; /* RHEL */
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-#else /* USE_FIPS */
-    return 0;
-#endif /* USE_FIPS */
 }
 
+#endif /* USE_FIPS */
+
 /* initialize libcrypto before invoking API functions that require it */
-void crypto_init(char *stunnel_dir) {
+void crypto_init(void) {
 #if OPENSSL_VERSION_NUMBER>=0x10100000L
-    OPENSSL_INIT_SETTINGS *conf=OPENSSL_INIT_new();
+    OPENSSL_INIT_SETTINGS *conf;
+#endif /* OPENSSL_VERSION_NUMBER>=0x10100000L */
 #ifdef USE_WIN32
-    char *path;
-#else /* USE_WIN32 */
-    (void)stunnel_dir; /* squash the unused parameter warning */
-#endif /* USE_WIN32 */
-#ifdef USE_WIN32
+    TCHAR stunnel_exe_path[MAX_PATH];
+    LPTSTR c;
+#if OPENSSL_VERSION_NUMBER>=0x10100000L
+    char *stunnel_dir, *path;
+#endif /* OPENSSL_VERSION_NUMBER>=0x10100000L */
+
+    /* identify stunnel_exe_path */
+    GetModuleFileName(0, stunnel_exe_path, MAX_PATH);
+    c=_tcsrchr(stunnel_exe_path, TEXT('\\')); /* last backslash */
+    if(c) { /* found */
+        *c=TEXT('\0'); /* truncate the program name */
+        c=_tcsrchr(stunnel_exe_path, TEXT('\\')); /* previous backslash */
+        if(c && !_tcscmp(c+1, TEXT("bin")))
+            *c=TEXT('\0'); /* truncate "bin" */
+    }
+
+    /* set current working directory */
+#ifndef _WIN32_WCE
+    if(!SetCurrentDirectory(stunnel_exe_path)) {
+        LPTSTR errmsg=str_tprintf(TEXT("Cannot set directory to %s"),
+            stunnel_exe_path);
+        message_box(errmsg, MB_ICONERROR);
+        str_free(errmsg);
+        exit(1);
+    }
+    /* try to enter the "config" subdirectory, ignore the result */
+    SetCurrentDirectory(TEXT("config"));
+#endif
+
+    stunnel_dir=tstr2str(stunnel_exe_path);
     if(!stunnel_dir) /* fail-safe */
         stunnel_dir=str_dup("..");
+
+    /* setup the environment */
+    path=str_printf("%s\\engines", stunnel_dir);
+    _putenv_s("OPENSSL_ENGINES", path);
+    str_free(path);
+    path=str_printf("%s\\ossl-modules", stunnel_dir);
+    _putenv_s("OPENSSL_MODULES", path);
+    str_free(path);
+    path=str_printf("%s\\config\\openssl.cnf", stunnel_dir);
+    _putenv_s("OPENSSL_CONF", path);
+    str_free(path);
+#endif /* USE_WIN32 */
+
+    /* initialize OpenSSL */
+#if OPENSSL_VERSION_NUMBER>=0x10100000L
+    conf=OPENSSL_INIT_new();
+#ifdef USE_WIN32
     path=str_printf("%s\\config\\openssl.cnf", stunnel_dir);
     if(!OPENSSL_INIT_set_config_filename(conf, path)) {
         s_log(LOG_ERR, "Failed to set OpenSSL configuration file name");
     }
     str_free(path);
+#endif /* USE_WIN32 */
+    OPENSSL_init_crypto(
+        OPENSSL_INIT_LOAD_CRYPTO_STRINGS | OPENSSL_INIT_LOAD_CONFIG, conf);
+    OPENSSL_INIT_free(conf);
+#else /* OPENSSL_VERSION_NUMBER>=0x10100000L */
+    OPENSSL_config(NULL);
+    SSL_load_error_strings();
+    SSL_library_init();
+#endif /* OPENSSL_VERSION_NUMBER>=0x10100000L */
+
+#ifdef USE_WIN32
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    /* setup the default search path for providers */
+    /* WARNING: OpenSSL needs to already be initialized */
     path=str_printf("%s\\ossl-modules", stunnel_dir);
     if(!OSSL_PROVIDER_set_default_search_path(NULL, path)) {
         s_log(LOG_ERR, "Failed to set default ossl-modules path");
     }
     str_free(path);
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+#if OPENSSL_VERSION_NUMBER>=0x10100000L
     str_free(stunnel_dir);
-#endif /* USE_WIN32 */
-    OPENSSL_init_crypto(
-        OPENSSL_INIT_LOAD_CRYPTO_STRINGS | OPENSSL_INIT_LOAD_CONFIG, conf);
-    OPENSSL_INIT_free(conf);
-#else /* OPENSSL_VERSION_NUMBER>=0x10100000L */
-    (void)stunnel_dir; /* squash the unused parameter warning */
-    OPENSSL_config(NULL);
-    SSL_load_error_strings();
-    SSL_library_init();
 #endif /* OPENSSL_VERSION_NUMBER>=0x10100000L */
+#endif /* USE_WIN32 */
 }
 
-/* initialize lbssl before parsing the configuration file */
+/* initialize libssl before parsing the configuration file */
 int ssl_init(void) {
-    index_ssl_cli=SSL_get_ex_new_index(0,
-        strdup("CLI pointer"), NULL, NULL, NULL);
-    index_ssl_ctx_opt=SSL_CTX_get_ex_new_index(0,
-        strdup("SERVICE_OPTIONS pointer"), NULL, NULL, NULL);
-    index_session_authenticated=SSL_SESSION_get_ex_new_index(0,
-        strdup("session authenticated"), cb_new_auth, NULL, NULL);
-    index_session_connect_address=SSL_SESSION_get_ex_new_index(0,
-        strdup("session connect address"), NULL, cb_dup_addr, cb_free_addr);
+    index_ssl_cli=SSL_get_ex_new_index(0, NULL,
+        NULL, NULL, NULL);
+    index_ssl_ctx_opt=SSL_CTX_get_ex_new_index(0, NULL,
+        NULL, NULL, NULL);
+    index_session_authenticated=SSL_SESSION_get_ex_new_index(0, NULL,
+        cb_new_auth, NULL, NULL);
+    index_session_connect_address=SSL_SESSION_get_ex_new_index(0, NULL,
+        NULL, cb_dup_addr, cb_free_addr);
     if(index_ssl_cli<0 || index_ssl_ctx_opt<0 ||
             index_session_authenticated<0 ||
             index_session_connect_address<0) {
@@ -186,15 +239,22 @@ int DH_set0_pqg(DH *dh, BIGNUM *p, BIGNUM *q, BIGNUM *g) {
 #endif
 #endif
 
+#if OPENSSL_VERSION_NUMBER>=0x10100000L
 NOEXPORT void cb_new_auth(void *parent, void *ptr, CRYPTO_EX_DATA *ad,
         int idx, long argl, void *argp) {
+#else /* OPENSSL_VERSION_NUMBER>=0x10100000L */
+NOEXPORT int cb_new_auth(void *parent, void *ptr, CRYPTO_EX_DATA *ad,
+        int idx, long argl, void *argp) {
+#endif /* OPENSSL_VERSION_NUMBER>=0x10100000L */
     (void)parent; /* squash the unused parameter warning */
     (void)ptr; /* squash the unused parameter warning */
     (void)argl; /* squash the unused parameter warning */
-    s_log(LOG_DEBUG, "Initializing application specific data for %s",
-        (char *)argp);
+    (void)argp; /* squash the unused parameter warning */
     if(!CRYPTO_set_ex_data(ad, idx, (void *)(-1)))
-        sslerror("CRYPTO_set_ex_data");
+        ssl_error(NULL, "CRYPTO_set_ex_data");
+#if OPENSSL_VERSION_NUMBER<0x10100000L
+    return 1; /* success */
+#endif /* OPENSSL_VERSION_NUMBER<0x10100000L */
 }
 
 #if OPENSSL_VERSION_NUMBER>=0x30000000L
@@ -214,8 +274,7 @@ NOEXPORT int cb_dup_addr(CRYPTO_EX_DATA *to, CRYPTO_EX_DATA *from,
     (void)from; /* squash the unused parameter warning */
     (void)idx; /* squash the unused parameter warning */
     (void)argl; /* squash the unused parameter warning */
-    s_log(LOG_DEBUG, "Duplicating application specific data for %s",
-        (char *)argp);
+    (void)argp; /* squash the unused parameter warning */
     src=*(void **)from_d;
     len=addr_len(src);
     dst=str_alloc_detached((size_t)len);
@@ -230,37 +289,40 @@ NOEXPORT void cb_free_addr(void *parent, void *ptr, CRYPTO_EX_DATA *ad,
     (void)ad; /* squash the unused parameter warning */
     (void)idx; /* squash the unused parameter warning */
     (void)argl; /* squash the unused parameter warning */
-    s_log(LOG_DEBUG, "Deallocating application specific data for %s",
-        (char *)argp);
+    (void)argp; /* squash the unused parameter warning */
     str_free(ptr);
 }
 
 int ssl_configure(GLOBAL_OPTIONS *global) { /* configure global TLS settings */
 #ifdef USE_FIPS
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-    if(global->option.fips) {
-        if(!EVP_default_properties_is_fips_enabled(NULL)) {
+    if(global->option.fips !=
+            (OSSL_PROVIDER_available(NULL, "fips") &&
+            EVP_default_properties_is_fips_enabled(NULL))) {
+        if(global->option.fips) { /* need to enable */
             if(!fips_available()) {
-                sslerror("FIPS PROVIDER");
+                ssl_error(NULL, "FIPS PROVIDER");
                 return 1;
             }
-            if(!EVP_default_properties_enable_fips(NULL, 1) ||
-                    !EVP_default_properties_is_fips_enabled(NULL)) {
+            if(!EVP_default_properties_enable_fips(NULL, 1)) {
                 s_log(LOG_ERR, "Enabling FIPS provider failed");
                 return 1;
             }
-            s_log(LOG_NOTICE, "FIPS provider enabled");
-        }
-    } else {
-        if(EVP_default_properties_is_fips_enabled(NULL)) {
-            if(!EVP_default_properties_enable_fips(NULL, 0) ||
-                    EVP_default_properties_is_fips_enabled(NULL)) {
+        } else { /* need to disable */
+            if(fips_default()) {
+                s_log(LOG_ERR, "Refusing to override 'fips=yes' default property");
+                return 1;
+            }
+            if(!EVP_default_properties_enable_fips(NULL, 0)) {
                 s_log(LOG_ERR, "Disabling FIPS provider failed");
                 return 1;
             }
-            s_log(LOG_NOTICE, "FIPS provider disabled");
         }
     }
+    s_log(LOG_NOTICE, "FIPS provider %s",
+        (OSSL_PROVIDER_available(NULL, "fips") &&
+        EVP_default_properties_is_fips_enabled(NULL)) ?
+        "enabled" : "disabled");
 #else /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
     if(FIPS_mode()!=global->option.fips) {
         RAND_set_rand_method(NULL); /* reset RAND methods */
@@ -270,18 +332,19 @@ int ssl_configure(GLOBAL_OPTIONS *global) { /* configure global TLS settings */
 #else
             ERR_load_crypto_strings();
 #endif
-            sslerror("FIPS_mode_set");
+            ssl_error(NULL, "FIPS_mode_set");
             return 1;
         }
     }
-#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
     s_log(LOG_NOTICE, "FIPS mode %s",
         global->option.fips ? "enabled" : "disabled");
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 #endif /* USE_FIPS */
 
 #ifndef OPENSSL_NO_COMP
-    if(compression_configure(global))
+    if(compression_set(global))
         return 1;
+    compression_list();
 #endif /* OPENSSL_NO_COMP */
     if(prng_init(global))
         return 1;
@@ -290,7 +353,7 @@ int ssl_configure(GLOBAL_OPTIONS *global) { /* configure global TLS settings */
     ENGINE_load_builtin_engines();
 #endif
 
-    /* cryptographic algoritms can only be configured once,
+    /* cryptographic algorithms can only be configured once,
      * after all the engines are initialized */
 #if OPENSSL_VERSION_NUMBER>=0x10100000L
     OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS, NULL);
@@ -334,7 +397,7 @@ NOEXPORT void SSL_COMP_set0_compression_methods(STACK_OF(SSL_COMP) *new_meths) {
 
 #endif /* OPENSSL_VERSION_NUMBER>=0x10002000L */
 
-NOEXPORT void compression_init() {
+NOEXPORT void compression_init(void) {
     STACK_OF(SSL_COMP) *methods;
     COMP_METHOD *zlib;
 
@@ -358,32 +421,41 @@ NOEXPORT void compression_init() {
     comp_methods[COMP_ZLIB]=methods; /* reuse the memory */
 }
 
-NOEXPORT int compression_configure(GLOBAL_OPTIONS *global) {
-    STACK_OF(SSL_COMP) *methods;
-    int num_methods, i;
-
+NOEXPORT int compression_set(GLOBAL_OPTIONS *global) {
     if(!comp_methods[global->compression]) {
         s_log(LOG_ERR, "Configured compression is unsupported by OpenSSL");
         return 1;
     }
     SSL_COMP_set0_compression_methods(comp_methods[global->compression]);
+    return 0; /* success */
+}
+
+NOEXPORT void compression_list(void) {
+    STACK_OF(SSL_COMP) *methods;
+    int num_methods, i;
 
     methods=SSL_COMP_get_compression_methods();
     num_methods=sk_SSL_COMP_num(methods);
+    if(!num_methods) {
+        s_log(LOG_INFO, "Compression disabled");
+        return;
+    }
     s_log(LOG_INFO, "Compression enabled: %d method%s",
         num_methods, num_methods==1 ? "" : "s");
     for(i=0; i<num_methods; ++i) {
-        SSL_COMP *comp=sk_SSL_COMP_value(methods, i);
-        if(comp) {
-            const char *name=SSL_COMP_get0_name(comp);
-            /* see OpenSSL commit 847406923534dd791f73d0cda15d3f17f513f2a5 */
-            if(!name)
-                name="unknown";
-            s_log(LOG_INFO, "Compression id 0x%02x: %s",
-                SSL_COMP_get_id(comp), name);
-        }
+        SSL_COMP *comp;
+        const char *name;
+
+        comp=sk_SSL_COMP_value(methods, i);
+        if(!comp)
+            continue;
+        name=SSL_COMP_get0_name(comp);
+        /* see OpenSSL commit 847406923534dd791f73d0cda15d3f17f513f2a5 */
+        if(!name)
+            name="unknown";
+        s_log(LOG_INFO, "Compression id 0x%02x: %s",
+            SSL_COMP_get_id(comp), name);
     }
-    return 0; /* success */
 }
 #endif /* OPENSSL_NO_COMP */
 
@@ -470,7 +542,7 @@ NOEXPORT int add_rand_file(GLOBAL_OPTIONS *global, const char *filename) {
 
     readbytes=RAND_load_file(filename, global->random_bytes);
     if(readbytes<0) {
-        sslerror("RAND_load_file");
+        ssl_error(NULL, "RAND_load_file");
         s_log(LOG_INFO, "Cannot retrieve any random data from %s",
             filename);
         return 0;
@@ -489,7 +561,7 @@ NOEXPORT void update_rand_file(const char *filename) {
 
     writebytes=RAND_write_file(filename);
     if(writebytes<0) {
-        sslerror("RAND_write_file");
+        ssl_error(NULL, "RAND_write_file");
         s_log(LOG_WARNING, "Failed to write strong random data to %s - "
             "may be a permissions or seeding problem", filename);
         return;

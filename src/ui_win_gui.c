@@ -1,6 +1,6 @@
 /*
  *   stunnel       TLS offloading and load-balancing proxy
- *   Copyright (C) 1998-2022 Michal Trojnara <Michal.Trojnara@stunnel.org>
+ *   Copyright (C) 1998-2025 Michal Trojnara <Michal.Trojnara@stunnel.org>
  *
  *   This program is free software; you can redistribute it and/or modify it
  *   under the terms of the GNU General Public License as published by the
@@ -62,7 +62,6 @@
 WINBASEAPI BOOL WINAPI CheckTokenMembership(HANDLE, PSID, PBOOL);
 
 /* initialization */
-NOEXPORT int winsock_initialize(void);
 NOEXPORT unsigned __stdcall daemon_thread(void *);
 
 /* GUI core */
@@ -91,8 +90,10 @@ NOEXPORT void peer_menu_update(void);
 NOEXPORT void peer_menu_update_unlocked(void);
 NOEXPORT void peer_cert_save(WPARAM wParam);
 
+#if !defined(OPENSSL_NO_ENGINE) || OPENSSL_VERSION_NUMBER>=0x10101000L
 /* UI callbacks */
 NOEXPORT int pin_cb(UI *, UI_STRING *);
+#endif /* !defined(OPENSSL_NO_ENGINE) || OPENSSL_VERSION_NUMBER>=0x10101000L */
 
 /* log handling */
 NOEXPORT void log_save(void);
@@ -183,53 +184,19 @@ int WINAPI WinMain(HINSTANCE this_instance, HINSTANCE prev_instance,
         LPSTR lpCmdLine,
 #endif
         int nCmdShow) {
-    TCHAR stunnel_exe_path[MAX_PATH];
-    LPTSTR c;
-#ifndef _WIN32_WCE
-    LPTSTR errmsg;
-#endif
     HANDLE daemon;
 
     (void)prev_instance; /* squash the unused parameter warning */
     (void)lpCmdLine; /* squash the unused parameter warning */
     (void)nCmdShow; /* squash the unused parameter warning */
 
-    tls_init(); /* initialize thread-local storage */
     ghInst=this_instance;
-
-    /* set current working directory and engine path */
-    GetModuleFileName(0, stunnel_exe_path, MAX_PATH);
-    c=_tcsrchr(stunnel_exe_path, TEXT('\\')); /* last backslash */
-    if(c) { /* found */
-        *c=TEXT('\0'); /* truncate the program name */
-        c=_tcsrchr(stunnel_exe_path, TEXT('\\')); /* previous backslash */
-        if(c && !_tcscmp(c+1, TEXT("bin")))
-            *c=TEXT('\0'); /* truncate "bin" */
-    }
-#ifndef _WIN32_WCE
-    if(!SetCurrentDirectory(stunnel_exe_path)) {
-        errmsg=str_tprintf(TEXT("Cannot set directory to %s"),
-            stunnel_exe_path);
-        message_box(errmsg, MB_ICONERROR);
-        str_free(errmsg);
+    if(stunnel_init()) {
+        message_box(TEXT("Initialization failed"), MB_ICONERROR);
         return 1;
     }
-    /* try to enter the "config" subdirectory, ignore the result */
-    SetCurrentDirectory(TEXT("config"));
-#endif
-    _tputenv(str_tprintf(TEXT("OPENSSL_ENGINES=%s\\engines"),
-        stunnel_exe_path));
-    _tputenv(str_tprintf(TEXT("OPENSSL_MODULES=%s\\ossl-modules"),
-        stunnel_exe_path));
-    _tputenv(str_tprintf(TEXT("OPENSSL_CONF=%s\\config\\openssl.cnf"),
-        stunnel_exe_path));
-    crypto_init(tstr2str(stunnel_exe_path)); /* initialize libcrypto */
-
     gui_cmdline(); /* setup global cmdline structure */
     control_pipe_names();
-
-    if(winsock_initialize())
-        return 1;
 
 #ifndef _WIN32_WCE
     if(cmdline.service) { /* "-service" must be processed before "-install" */
@@ -268,18 +235,6 @@ int WINAPI WinMain(HINSTANCE this_instance, HINSTANCE prev_instance,
     CloseHandle(daemon);
     WaitForSingleObject(main_initialized, INFINITE);
     return gui_loop();
-}
-
-/* try to load winsock2 resolver functions from a specified dll name */
-NOEXPORT int winsock_initialize() {
-    static struct WSAData wsa_state;
-
-    if(WSAStartup(MAKEWORD(2, 2), &wsa_state)) {
-        message_box(TEXT("Failed to initialize winsock"), MB_ICONERROR);
-        return 1; /* error */
-    }
-    resolver_init();
-    return 0; /* IPv4 detected -> OK */
 }
 
 NOEXPORT unsigned __stdcall daemon_thread(void *arg) {
@@ -771,6 +726,9 @@ NOEXPORT LRESULT CALLBACK pass_proc(HWND dialog_handle, UINT message,
         SendMessage(dialog_handle, DM_SETDEFID, (WPARAM)IDCANCEL, (LPARAM)0);
 
         if(current_section) { /* should always be set */
+            SetDlgItemText(dialog_handle, IDE_PASSPHRASE_LABEL,
+                is_prefix(current_section->key, "pkcs11:") ?
+                    TEXT("Smart card PIN:") : TEXT("Key passphrase:"));
             key_file_name=str2tstr(current_section->key);
             titlebar=str_tprintf(TEXT("Private key: %s"), key_file_name);
             str_free(key_file_name);
@@ -1181,7 +1139,7 @@ int ui_passwd_cb(char *buf, int size, int rwflag, void *userdata) {
     return len;
 }
 
-#ifndef OPENSSL_NO_ENGINE
+#if !defined(OPENSSL_NO_ENGINE) || OPENSSL_VERSION_NUMBER>=0x10101000L
 
 NOEXPORT int pin_cb(UI *ui, UI_STRING *uis) {
     if(!DialogBox(ghInst, TEXT("PassBox"), hwnd, (DLGPROC)pass_proc))
@@ -1191,23 +1149,23 @@ NOEXPORT int pin_cb(UI *ui, UI_STRING *uis) {
     return 1;
 }
 
-int (*ui_get_opener()) (UI *) {
+int (*ui_get_opener(void)) (UI *) {
     return NULL;
 }
 
-int (*ui_get_writer()) (UI *, UI_STRING *) {
+int (*ui_get_writer(void)) (UI *, UI_STRING *) {
     return NULL;
 }
 
-int (*ui_get_reader()) (UI *, UI_STRING *) {
+int (*ui_get_reader(void)) (UI *, UI_STRING *) {
     return hwnd ? pin_cb : NULL; /* only allow for UI in GUI mode */
 }
 
-int (*ui_get_closer()) (UI *) {
+int (*ui_get_closer(void)) (UI *) {
     return NULL;
 }
 
-#endif
+#endif /* !defined(OPENSSL_NO_ENGINE) || OPENSSL_VERSION_NUMBER>=0x10101000L */
 
 /**************************************** log handling */
 

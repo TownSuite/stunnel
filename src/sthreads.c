@@ -1,6 +1,6 @@
 /*
  *   stunnel       TLS offloading and load-balancing proxy
- *   Copyright (C) 1998-2022 Michal Trojnara <Michal.Trojnara@stunnel.org>
+ *   Copyright (C) 1998-2025 Michal Trojnara <Michal.Trojnara@stunnel.org>
  *
  *   This program is free software; you can redistribute it and/or modify it
  *   under the terms of the GNU General Public License as published by the
@@ -111,7 +111,7 @@ NOEXPORT void threadid_func(CRYPTO_THREADID *tid) {
 }
 #endif
 
-NOEXPORT void thread_id_init() {
+NOEXPORT void thread_id_init(void) {
 #if OPENSSL_VERSION_NUMBER>=0x10000000L && OPENSSL_VERSION_NUMBER<0x10100000L
     CRYPTO_THREADID_set_callback(threadid_func);
 #endif
@@ -389,7 +389,7 @@ int CRYPTO_atomic_add(int *val, int amount, int *ret, CRYPTO_RWLOCK *lock) {
 
 #endif /* OPENSSL_VERSION_NUMBER<0x10100004L */
 
-NOEXPORT void locking_init() {
+NOEXPORT void locking_init(void) {
     size_t i;
 #if defined(USE_OS_THREADS) && OPENSSL_VERSION_NUMBER<0x10100004L
     size_t num;
@@ -475,7 +475,7 @@ int sthreads_init(void) {
     /* update tls for newly allocated ready_head */
     ui_tls=tls_alloc(NULL, ui_tls, "ui");
     /* no need to initialize ucontext_t structure here
-       it will be initialied with swapcontext() call */
+       it will be initialized with swapcontext() call */
     return 0;
 }
 

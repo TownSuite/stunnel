@@ -1,5 +1,5 @@
 ## mingw/mingw64 Makefile
-# by Michal Trojnara 1998-2022
+# by Michal Trojnara 1998-2025
 
 # 32-bit Windows
 #win32_arch=win32
@@ -11,6 +11,9 @@
 #win32_targetcpu=x86_64
 #win32_mingw=mingw64
 
+# Uncomment to enable mimalloc
+#win32_mimalloc_dir := /opt/mimalloc-$(win32_mingw)
+
 bindir = ../bin/$(win32_arch)
 objdir = ../obj/$(win32_arch)
 
@@ -18,23 +21,31 @@ ifeq ($(win32_ssl_dir),)
 win32_ssl_dir := /opt/openssl-$(win32_mingw)
 endif
 win32_cppflags = -I$(win32_ssl_dir)/include
+ifneq ($(win32_mimalloc_dir),)
+win32_cppflags += -I$(win32_mimalloc_dir)/include/mimalloc-2.1
+endif
 win32_cflags = -g -mthreads -O2
-win32_cflags += -fstack-protector
-win32_cflags += -Wall -Wextra -Wpedantic -Wconversion -Wno-long-long -ansi
-win32_cflags += -D_FORTIFY_SOURCE=2 -DUNICODE -D_UNICODE
+win32_cflags += -Wall -Wextra -Wpedantic -Wconversion -std=c99
+win32_cflags += -DUNICODE -D_UNICODE
+ifneq ($(win32_mimalloc_dir),)
+win32_cflags += -DHAVE_MIMALLOC_H
+endif
+win32_cflags += -fstack-protector-strong -fcf-protection=full -D_FORTIFY_SOURCE=2
 win32_ldflags = -g -mthreads -pipe
-win32_ldflags += -fstack-protector
-win32_ldflags += -Wl,--dynamicbase,--nxcompat,--no-seh,--tsaware,--no-insert-timestamp
 ifeq ($(win32_arch),win64)
 win32_ldflags += -Wl,--high-entropy-va
 else
 win32_ldflags += -Wl,--large-address-aware
 endif
+win32_ldflags += -Wl,--dynamicbase,--nxcompat,--no-seh,--tsaware,--no-insert-timestamp
 
 # -fstack-protector was broken in x86_64-w64-mingw32-gcc 8.2.0
 
 # compiling with -D_FORTIFY_SOURCE=2 may require linking with -lssp
 win32_common_libs = -lws2_32 -lkernel32 -lssp
+ifneq ($(win32_mimalloc_dir),)
+win32_common_libs += -L$(win32_mimalloc_dir)/bin -lmimalloc
+endif
 ifneq (,$(wildcard $(win32_ssl_dir)/lib64/libcrypto.dll.a))
     # use OpenSSL 3.x.x mingw-generated library stubs if available
     win32_ssl_libs = -L$(win32_ssl_dir)/lib64 -lcrypto -lssl
@@ -50,7 +61,7 @@ win32_cli_libs = $(win32_common_libs) $(win32_ssl_libs)
 
 common_headers = common.h prototypes.h version.h
 win32_common = tls str file client log options protocol network resolver
-win32_common += ssl ctx verify sthreads fd dhparam cron stunnel
+win32_common += ssl ctx verify ocsp sthreads fd dhparam cron stunnel
 win32_gui = ui_win_gui resources
 win32_cli = ui_win_cli
 win32_common_objs = $(addsuffix .o, $(addprefix $(objdir)/, $(win32_common)))

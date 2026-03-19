@@ -1,6 +1,6 @@
 /*
  *   stunnel       TLS offloading and load-balancing proxy
- *   Copyright (C) 1998-2022 Michal Trojnara <Michal.Trojnara@stunnel.org>
+ *   Copyright (C) 1998-2025 Michal Trojnara <Michal.Trojnara@stunnel.org>
  *
  *   This program is free software; you can redistribute it and/or modify it
  *   under the terms of the GNU General Public License as published by the
@@ -64,7 +64,7 @@ static int *ipc_socket, *busy;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-result"
 #endif /* __GNUC__ */
-int libwrap_init() {
+int libwrap_init(void) {
 #ifdef USE_LIBWRAP_POOL
     unsigned i, j;
     int rfd;

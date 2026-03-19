@@ -2,7 +2,7 @@
 
 import logging
 import pathlib
-from plugin_collection import Plugin
+from plugin_collection import Plugin, ERR_CONN_RESET
 from maketest import (
     Config,
     StunnelAcceptConnect
@@ -19,7 +19,7 @@ class StunnelTest(StunnelAcceptConnect):
 
 
 class BindingTest(StunnelTest):
-    """Checking if the service does't refuse to start if binding fails for some addresses:ports.
+    """Checking if the service doesn't refuse to start if binding fails for some addresses:ports.
        Sample log expected:
        LOG5[ui]: Binding service [server] to 127.0.0.1:43293: Address already in use (98)
     """
@@ -34,7 +34,7 @@ class BindingTest(StunnelTest):
             "unsupported protocol",
             "TLS accepted: previous session reused",
             "Redirecting connection",
-            "Connection reset by peer",
+            ERR_CONN_RESET,
             "Connection lost",
             "Client received unexpected message",
             "Server received unexpected message",
@@ -48,7 +48,6 @@ class BindingTest(StunnelTest):
     ) -> pathlib.Path:
         """Create a configuration file for a stunnel server."""
         contents = f"""
-    pid = {cfg.tempd}/stunnel_{service}.pid
     foreground = yes
     debug = debug
     syslog = no

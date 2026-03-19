@@ -1,5 +1,5 @@
 ## Process this file with automake to produce Makefile.in
-# by Michal Trojnara 1998-2022
+# by Michal Trojnara 1998-2025
 
 EXTRA_DIST = stunnel.pod.in stunnel.8.in stunnel.html.in en
 EXTRA_DIST += stunnel.pl.pod.in stunnel.pl.8.in stunnel.pl.html.in pl
@@ -14,9 +14,11 @@ DISTCLEANFILES = $(doc_DATA)
 
 SUFFIXES = .pod.in .8.in .html.in
 
+BUILD_DATE = $(shell date --utc --date=@$(or $(SOURCE_DATE_EPOCH),$(shell date +%s)) +%Y.%m.%d)
+
 .pod.in.8.in:
 	pod2man -u -n stunnel -s 8 -r $(VERSION) \
-		-c "stunnel TLS Proxy" -d `date +%Y.%m.%d` $< $@
+		-c "stunnel TLS Proxy" -d '$(BUILD_DATE)' $< $@
 
 .pod.in.html.in:
 	pod2html --index --backlink --header \

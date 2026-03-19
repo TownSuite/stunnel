@@ -1,6 +1,6 @@
 /*
  *   stunnel       TLS offloading and load-balancing proxy
- *   Copyright (C) 1998-2022 Michal Trojnara <Michal.Trojnara@stunnel.org>
+ *   Copyright (C) 1998-2025 Michal Trojnara <Michal.Trojnara@stunnel.org>
  *
  *   This program is free software; you can redistribute it and/or modify it
  *   under the terms of the GNU General Public License as published by the
@@ -40,24 +40,13 @@
 volatile int tls_initialized=0;
 
 NOEXPORT void tls_platform_init(void);
-#if OPENSSL_VERSION_NUMBER<0x10100000L
-NOEXPORT void free_function(void *);
-#endif
 
 /**************************************** thread local storage */
 
-/* this has to be the first function called from ui_*.c */
-void tls_init() {
+void tls_init(void) {
     tls_platform_init();
     tls_initialized=1;
     ui_tls=tls_alloc(NULL, NULL, "ui");
-#if OPENSSL_VERSION_NUMBER>=0x10100000L
-    CRYPTO_set_mem_functions(str_alloc_detached_debug,
-        str_realloc_detached_debug, str_free_debug);
-#else
-    CRYPTO_set_mem_ex_functions(str_alloc_detached_debug,
-        str_realloc_detached_debug, free_function);
-#endif
 }
 
 /* this has to be the first function called by a new thread */
@@ -73,7 +62,7 @@ TLS_DATA *tls_alloc(CLI *c, TLS_DATA *inherited, const char *txt) {
             fatal("Out of memory");
         if(c)
             c->tls=tls_data;
-        str_init(tls_data);
+        str_thread_init(tls_data);
         tls_data->c=c;
         tls_data->opt=c?c->opt:&service_options;
     }
@@ -93,13 +82,13 @@ TLS_DATA *tls_alloc(CLI *c, TLS_DATA *inherited, const char *txt) {
 }
 
 /* per-thread thread-local storage cleanup */
-void tls_cleanup() {
+void tls_cleanup(void) {
     TLS_DATA *tls_data;
 
     tls_data=tls_get();
     if(!tls_data)
         return;
-    str_cleanup(tls_data);
+    str_thread_cleanup(tls_data);
     str_free_const(tls_data->id); /* detached allocation */
     tls_set(NULL);
     free(tls_data);
@@ -109,7 +98,7 @@ void tls_cleanup() {
 
 static TLS_DATA *global_tls=NULL;
 
-NOEXPORT void tls_platform_init() {
+NOEXPORT void tls_platform_init(void) {
 }
 
 void tls_set(TLS_DATA *tls_data) {
@@ -119,7 +108,7 @@ void tls_set(TLS_DATA *tls_data) {
         global_tls=tls_data;
 }
 
-TLS_DATA *tls_get() {
+TLS_DATA *tls_get(void) {
     if(ready_head)
         return ready_head->tls;
     else /* ucontext threads not initialized */
@@ -132,14 +121,14 @@ TLS_DATA *tls_get() {
 
 static TLS_DATA *global_tls=NULL;
 
-NOEXPORT void tls_platform_init() {
+NOEXPORT void tls_platform_init(void) {
 }
 
 void tls_set(TLS_DATA *tls_data) {
     global_tls=tls_data;
 }
 
-TLS_DATA *tls_get() {
+TLS_DATA *tls_get(void) {
     return global_tls;
 }
 
@@ -149,7 +138,7 @@ TLS_DATA *tls_get() {
 
 static pthread_key_t pthread_key;
 
-NOEXPORT void tls_platform_init() {
+NOEXPORT void tls_platform_init(void) {
     pthread_key_create(&pthread_key, NULL);
 }
 
@@ -157,7 +146,7 @@ void tls_set(TLS_DATA *tls_data) {
     pthread_setspecific(pthread_key, tls_data);
 }
 
-TLS_DATA *tls_get() {
+TLS_DATA *tls_get(void) {
     return pthread_getspecific(pthread_key);
 }
 
@@ -167,7 +156,7 @@ TLS_DATA *tls_get() {
 
 static DWORD tls_index;
 
-NOEXPORT void tls_platform_init() {
+NOEXPORT void tls_platform_init(void) {
     tls_index=TlsAlloc();
 }
 
@@ -175,20 +164,10 @@ void tls_set(TLS_DATA *tls_data) {
     TlsSetValue(tls_index, tls_data);
 }
 
-TLS_DATA *tls_get() {
+TLS_DATA *tls_get(void) {
     return TlsGetValue(tls_index);
 }
 
 #endif /* USE_WIN32 */
-
-/**************************************** OpenSSL allocator hook */
-
-#if OPENSSL_VERSION_NUMBER<0x10100000L
-NOEXPORT void free_function(void *ptr) {
-    /* CRYPTO_set_mem_ex_functions() needs a function rather than a macro */
-    /* unfortunately, OpenSSL provides no file:line information here */
-    str_free_debug(ptr, "OpenSSL", 0);
-}
-#endif
 
 /* end of tls.c */
